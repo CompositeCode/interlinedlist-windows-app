@@ -1,0 +1,26 @@
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- InterlinedList — Strata dark theme semantic brushes -->
+    <!-- Source: brand-kit/theme/tokens.json › theme.dark -->
+
+    <SolidColorBrush x:Key="AppBgBrush"         Color="#FF121317"/>
+    <SolidColorBrush x:Key="SurfaceBrush"        Color="#FF17191F"/>
+    <SolidColorBrush x:Key="Surface2Brush"       Color="#FF1B1D23"/>
+    <SolidColorBrush x:Key="Surface3Brush"       Color="#FF22252D"/>
+    <SolidColorBrush x:Key="BorderBrush"         Color="#14FFFFFF"/>  <!-- rgba(255,255,255,0.08) -->
+    <SolidColorBrush x:Key="BorderStrongBrush"   Color="#29FFFFFF"/>  <!-- rgba(255,255,255,0.16) -->
+    <SolidColorBrush x:Key="TextBrush"           Color="#FFF3F1EA"/>
+    <SolidColorBrush x:Key="TextBodyBrush"       Color="#D9F3F1EA"/>  <!-- 0.85 opacity -->
+    <SolidColorBrush x:Key="TextMutedBrush"      Color="#73F3F1EA"/>  <!-- 0.45 opacity -->
+    <SolidColorBrush x:Key="MastheadBrush"       Color="#FF0C2C3A"/>
+    <SolidColorBrush x:Key="OnMastheadBrush"     Color="#FFF3F1EA"/>
+    <SolidColorBrush x:Key="PrimaryBrush"        Color="#FF3FBF8C"/>
+    <SolidColorBrush x:Key="PrimaryHoverBrush"   Color="#FF2FA877"/>
+    <SolidColorBrush x:Key="LinkBrush"           Color="#FF7FB8C4"/>
+    <SolidColorBrush x:Key="NavActiveBgBrush"    Color="#1FFFFFFF"/>
+    <SolidColorBrush x:Key="NavHoverBgBrush"     Color="#14FFFFFF"/>
+    <SolidColorBrush x:Key="NavTextBrush"        Color="#B3FFFFFF"/>
+
+</ResourceDictionary>

@@ -1,0 +1,435 @@
+<Window x:Class="InterlinedList.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+        xmlns:models="clr-namespace:InterlinedList.Models"
+        Title="InterlinedList"
+        Height="800" Width="1280"
+        MinHeight="560" MinWidth="840"
+        WindowStyle="None"
+        ResizeMode="CanResize"
+        Background="{DynamicResource AppBgBrush}">
+
+    <!-- WindowChrome: native resize + snap with a custom caption area -->
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="36"
+                      CornerRadius="0"
+                      GlassFrameThickness="0"
+                      ResizeBorderThickness="6"/>
+    </WindowChrome.WindowChrome>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="36"/>  <!-- Title bar -->
+            <RowDefinition Height="*"/>   <!-- App body -->
+        </Grid.RowDefinitions>
+
+        <!-- ── Custom title bar ─────────────────────────────────────── -->
+        <Grid Grid.Row="0" Background="{StaticResource TitlebarBrush}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Logo + app name (drag region) -->
+            <StackPanel Grid.Column="0"
+                        Orientation="Horizontal"
+                        VerticalAlignment="Center"
+                        Margin="12,0,0,0">
+                <Image Source="../brand-kit/logo/logo-icon.svg"
+                       Width="18" Height="18"
+                       Margin="0,0,8,0"
+                       VerticalAlignment="Center"/>
+                <TextBlock Text="InterlinedList"
+                           Foreground="{StaticResource TitlebarTextBrush}"
+                           FontSize="12"
+                           FontWeight="SemiBold"
+                           VerticalAlignment="Center"/>
+            </StackPanel>
+
+            <!-- Window controls: Min / Max / Close -->
+            <StackPanel Grid.Column="1"
+                        Orientation="Horizontal"
+                        WindowChrome.IsHitTestVisibleInChrome="True">
+
+                <Button x:Name="BtnMinimize"
+                        ToolTip="Minimize"
+                        Click="BtnMinimize_Click"
+                        Style="{StaticResource TitlebarBtnStyle}">
+                    <Path Data="M0,5 H10" Stroke="White" StrokeThickness="1.2"
+                          Width="10" Height="10" Stretch="None"
+                          HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Button>
+
+                <Button x:Name="BtnMaximize"
+                        ToolTip="Maximize"
+                        Click="BtnMaximize_Click"
+                        Style="{StaticResource TitlebarBtnStyle}">
+                    <Rectangle Width="9" Height="9"
+                               Stroke="White" StrokeThickness="1.2"
+                               Fill="Transparent"/>
+                </Button>
+
+                <Button x:Name="BtnClose"
+                        ToolTip="Close"
+                        Click="BtnClose_Click"
+                        Style="{StaticResource TitlebarCloseBtnStyle}">
+                    <Path Data="M1,1 L9,9 M9,1 L1,9"
+                          Stroke="White" StrokeThickness="1.2"
+                          Width="10" Height="10" Stretch="None"
+                          HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Button>
+
+            </StackPanel>
+        </Grid>
+
+        <!-- ── App body ──────────────────────────────────────────────── -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="220"/>  <!-- Left nav -->
+                <ColumnDefinition Width="*"/>    <!-- Feed -->
+                <ColumnDefinition Width="260"/>  <!-- Right rail -->
+            </Grid.ColumnDefinitions>
+
+            <!-- ── Left navigation ───────────────────────────────────── -->
+            <Grid Grid.Column="0" Background="{DynamicResource MastheadBrush}">
+                <StackPanel Margin="0,8,0,0">
+
+                    <Button x:Name="NavFeed"    Tag="Feed"          Click="NavItem_Click"
+                            Style="{StaticResource NavItemStyle}" Content="Feed"/>
+                    <Button x:Name="NavStreams" Tag="Streams"       Click="NavItem_Click"
+                            Style="{StaticResource NavItemStyle}" Content="Streams"/>
+                    <Button x:Name="NavAlerts"  Tag="Alerts"        Click="NavItem_Click"
+                            Style="{StaticResource NavItemStyle}" Content="Alerts"/>
+                    <Button x:Name="NavSearch"  Tag="Search"        Click="NavItem_Click"
+                            Style="{StaticResource NavItemStyle}" Content="Search"/>
+
+                </StackPanel>
+            </Grid>
+
+            <!-- ── Feed ──────────────────────────────────────────────── -->
+            <Grid Grid.Column="1" Background="{DynamicResource AppBgBrush}">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- Feed header -->
+                <Border Grid.Row="0"
+                        Background="{DynamicResource SurfaceBrush}"
+                        BorderBrush="{DynamicResource BorderBrush}"
+                        BorderThickness="0,0,0,1"
+                        Padding="20,12">
+                    <Grid>
+                        <TextBlock Text="Feed"
+                                   FontSize="17" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextBrush}"
+                                   VerticalAlignment="Center"/>
+                        <Button Content="+ Compose"
+                                HorizontalAlignment="Right"
+                                Style="{StaticResource PrimaryBtnStyle}"/>
+                    </Grid>
+                </Border>
+
+                <!-- Post list -->
+                <ScrollViewer Grid.Row="1"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled"
+                              Padding="16,12">
+                    <ItemsControl x:Name="PostList"
+                                  ItemsSource="{Binding Posts}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type models:Post}">
+                                <Border Margin="0,0,0,8"
+                                        Background="{DynamicResource SurfaceBrush}"
+                                        BorderBrush="{DynamicResource BorderBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="4">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="4"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <!-- Stream color edge -->
+                                        <Border Grid.Column="0" CornerRadius="4,0,0,4">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Stream}" Value="Teal">
+                                                            <Setter Property="Background" Value="{StaticResource TealBrush}"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding Stream}" Value="Green">
+                                                            <Setter Property="Background" Value="{StaticResource GreenBrush}"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding Stream}" Value="Amber">
+                                                            <Setter Property="Background" Value="{StaticResource AmberBrush}"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+                                        </Border>
+
+                                        <!-- Card content -->
+                                        <StackPanel Grid.Column="1" Margin="12,10">
+
+                                            <!-- Header row -->
+                                            <DockPanel Margin="0,0,0,6">
+                                                <TextBlock DockPanel.Dock="Left"
+                                                           Text="{Binding Author}"
+                                                           FontSize="12" FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource TextBrush}"
+                                                           Margin="0,0,8,0"/>
+                                                <Border DockPanel.Dock="Left"
+                                                        Background="{DynamicResource Surface3Brush}"
+                                                        CornerRadius="999"
+                                                        Padding="6,1"
+                                                        Margin="0,0,8,0">
+                                                    <TextBlock Text="{Binding StreamName}"
+                                                               FontSize="10" FontWeight="Medium"
+                                                               Foreground="{DynamicResource TextMutedBrush}"
+                                                               TextOptions.TextFormattingMode="Display"/>
+                                                </Border>
+                                                <!-- Live badge -->
+                                                <Border DockPanel.Dock="Left"
+                                                        Margin="0,0,8,0"
+                                                        Visibility="{Binding IsLive, Converter={StaticResource BoolToVisibility}}">
+                                                    <TextBlock Text="● LIVE"
+                                                               FontSize="9" FontWeight="Medium"
+                                                               Foreground="{StaticResource AmberBrush}"/>
+                                                </Border>
+                                                <TextBlock DockPanel.Dock="Right"
+                                                           Text="{Binding TimeFormatted}"
+                                                           FontFamily="JetBrains Mono, Consolas"
+                                                           FontSize="10"
+                                                           Foreground="{DynamicResource TextMutedBrush}"
+                                                           HorizontalAlignment="Right"/>
+                                            </DockPanel>
+
+                                            <!-- Body -->
+                                            <TextBlock Text="{Binding Body}"
+                                                       FontSize="13"
+                                                       Foreground="{DynamicResource TextBodyBrush}"
+                                                       TextWrapping="Wrap"
+                                                       LineHeight="20"
+                                                       Margin="0,0,0,8"/>
+
+                                            <!-- Footer: Dig -->
+                                            <StackPanel Orientation="Horizontal">
+                                                <Button Content="Dig"
+                                                        Style="{StaticResource DigBtnStyle}"/>
+                                                <TextBlock Text="{Binding Digs}"
+                                                           FontFamily="JetBrains Mono, Consolas"
+                                                           FontSize="10"
+                                                           Foreground="{DynamicResource TextMutedBrush}"
+                                                           VerticalAlignment="Center"
+                                                           Margin="8,0,0,0"/>
+                                            </StackPanel>
+                                        </StackPanel>
+
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </Grid>
+
+            <!-- ── Right rail ─────────────────────────────────────────── -->
+            <Border Grid.Column="2"
+                    Background="{DynamicResource SurfaceBrush}"
+                    BorderBrush="{DynamicResource BorderBrush}"
+                    BorderThickness="1,0,0,0">
+                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Margin="16">
+
+                        <!-- Stream clock -->
+                        <Border Background="{StaticResource TealBrush}"
+                                CornerRadius="10"
+                                Padding="16,12"
+                                Margin="0,0,0,20">
+                            <StackPanel HorizontalAlignment="Center">
+                                <TextBlock Text="STREAM CLOCK"
+                                           FontFamily="JetBrains Mono, Consolas"
+                                           FontSize="9" FontWeight="Medium"
+                                           Foreground="#99FFFFFF"
+                                           HorizontalAlignment="Center"
+                                           Margin="0,0,0,4"/>
+                                <TextBlock x:Name="ClockDisplay"
+                                           FontFamily="JetBrains Mono, Consolas"
+                                           FontSize="22" FontWeight="Medium"
+                                           Foreground="White"
+                                           HorizontalAlignment="Center"
+                                           Text="--:--:--Z"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Trending tags -->
+                        <TextBlock Text="TRENDING"
+                                   FontSize="10" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextMutedBrush}"
+                                   Margin="0,0,0,8"/>
+
+                        <ItemsControl ItemsSource="{Binding TrendingTags}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding}"
+                                               FontSize="13" FontWeight="Medium"
+                                               Foreground="{DynamicResource LinkBrush}"
+                                               Margin="0,0,0,6"
+                                               Cursor="Hand"/>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+
+        </Grid><!-- /.app-body Grid -->
+    </Grid><!-- /root Grid -->
+
+    <!-- ── Styles ────────────────────────────────────────────────── -->
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
+
+        <!-- Title bar button base -->
+        <Style x:Key="TitlebarBtnStyle" TargetType="Button">
+            <Setter Property="Width" Value="46"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="WindowChrome.IsHitTestVisibleInChrome" Value="True"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bg" Background="{TemplateBinding Background}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="#1EFFFFFF"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="#14FFFFFF"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Close button (red hover) -->
+        <Style x:Key="TitlebarCloseBtnStyle" TargetType="Button"
+               BasedOn="{StaticResource TitlebarBtnStyle}">
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#FFE81123"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Nav item -->
+        <Style x:Key="NavItemStyle" TargetType="Button">
+            <Setter Property="Height" Value="40"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="Padding" Value="16,0"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Foreground" Value="{DynamicResource NavTextBrush}"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="Medium"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bg" Background="{TemplateBinding Background}"
+                                BorderBrush="{StaticResource GreenBrush}"
+                                BorderThickness="3,0,0,0">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="BorderThickness" Value="0"/>
+                                </Style>
+                            </Border.Style>
+                            <ContentPresenter Margin="{TemplateBinding Padding}"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="Background"
+                                        Value="{DynamicResource NavHoverBgBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bg" Property="Background"
+                                        Value="{DynamicResource NavActiveBgBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Primary green button -->
+        <Style x:Key="PrimaryBtnStyle" TargetType="Button">
+            <Setter Property="Background" Value="{DynamicResource PrimaryBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="16,6"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bg"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="4"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="Background"
+                                        Value="{DynamicResource PrimaryHoverBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Amber Dig button -->
+        <Style x:Key="DigBtnStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{StaticResource AmberBrush}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource AmberBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="10,2"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bg"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="3"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="#1AF0A830"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+    </Window.Resources>
+
+</Window>
