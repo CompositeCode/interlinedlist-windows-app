@@ -1,0 +1,108 @@
+# ─── Visual Studio ───────────────────────────────────────────────────────────
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.userprefs
+
+# ─── .NET / MSBuild / NuGet ──────────────────────────────────────────────────
+bin/
+obj/
+*.nupkg
+*.snupkg
+*.nuspec
+packages/
+project.lock.json
+project.fragment.lock.json
+artifacts/
+*.binlog
+
+# ─── WinUI / UWP / MSIX ──────────────────────────────────────────────────────
+AppPackages/
+BundleArtifacts/
+Package.StoreAssociation.xml
+_pkginfo.txt
+*.pfx
+*.cer
+*.appx
+*.appxbundle
+*.appxupload
+*.msix
+*.msixbundle
+*.msixupload
+Generated Files/
+
+# ─── Electron / Node.js ──────────────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-debug.log*
+.npm
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+.pnp.*
+dist/
+dist-electron/
+release/
+out/
+.webpack/
+
+# ─── TypeScript / JavaScript ─────────────────────────────────────────────────
+*.js.map
+*.d.ts.map
+tsconfig.tsbuildinfo
+
+# ─── Windows OS ──────────────────────────────────────────────────────────────
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msm
+*.msp
+*.lnk
+
+# ─── macOS (dev machine artifacts) ───────────────────────────────────────────
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# ─── IDEs ────────────────────────────────────────────────────────────────────
+# VS Code
+.vscode/*
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/tasks.json
+!.vscode/settings.json
+
+# JetBrains / Rider
+.idea/
+*.iml
+*.iws
+
+# ─── Logs & temp ─────────────────────────────────────────────────────────────
+logs/
+*.log
+*.tmp
+*.temp
+*.cache
+.cache/
+
+# ─── Secrets / local config ──────────────────────────────────────────────────
+*.env
+*.env.local
+*.env.*.local
+appsettings.Local.json
+secrets.json
+local.settings.json
