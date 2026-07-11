@@ -151,25 +151,68 @@ replace `installer/License.rtf` with the real EULA.
 **MSIX (`InterlinedList.Package/`)** — classic Desktop Bridge "Windows
 Application Packaging Project" (`.wapproj`), the standard route for putting
 an existing Win32/.NET desktop app into the Microsoft Store or sideloaded
-MSIX. This project type is **not** dotnet-CLI buildable — it requires the
-"Universal Windows Platform development" workload in Visual Studio 2022,
-since its targets come from the VS-installed
-`Microsoft.DesktopBridge.props/.targets`, not a NuGet package. To build:
-open `InterlinedList.slnx` in VS2022 on Windows, right-click
-`InterlinedList.Package` → Publish (or Build for a local test package). Since
-this project was hand-authored outside VS, **on first open let VS
-reload/validate it** — check `TargetPlatformVersion`/`TargetPlatformMinVersion`
-against installed SDKs, and confirm the `InterlinedList` project reference is
-recognized as the entry point (`EntryPointProjectUniqueName`). **Before Store
-submission:** replace the placeholder `Publisher` value in
-`Package.appxmanifest` with the identity reserved in Partner Center (Partner
-Center's "Associate App with the Store" wizard in VS will rewrite `Identity`
-and `Properties` for you).
+MSIX. This project type is **not** `dotnet build`-able — its targets come
+from `Microsoft.DesktopBridge.props/.targets`, installed with Visual Studio's
+"Universal Windows Platform development" workload, not a NuGet package. It
+builds fine headlessly with classic MSBuild once that workload is present
+(confirmed in CI — see below); you don't need the VS IDE itself, just its
+installed build tools. Command (matches what CI runs):
+
+```powershell
+msbuild InterlinedList.Package/InterlinedList.Package.wapproj /restore `
+  /p:Configuration=Release /p:Platform=x64 /p:AppxBundlePlatforms=x64 `
+  /p:AppxBundle=Always /p:UapAppxPackageBuildMode=StoreUpload
+```
+
+`UapAppxPackageBuildMode=StoreUpload` produces an unsigned `.msixupload`
+bundle meant to be uploaded directly to Partner Center — Partner Center signs
+it during ingestion, so **no code-signing certificate is needed for Store
+submission** (you would need one for direct sideloading instead, a different
+`UapAppxPackageBuildMode`). **Before Store submission:** replace the
+placeholder `Publisher` value in `Package.appxmanifest` with the identity
+reserved in Partner Center (VS's "Associate App with the Store" wizard will
+rewrite `Identity`/`Properties` for you if you do it from the IDE instead).
+
+**`TargetPlatformVersion` must match a UAP SDK actually installed on the
+build machine** — this isn't a fixed "latest is fine" choice. Different
+machines (and different GitHub Actions runner image versions over time) have
+different SDKs installed; check what's present rather than assuming
+(`Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\Platforms\UAP"`) if a
+future SDK-not-found error (`APPX3217`) shows up after a runner image update.
 
 Image assets in `InterlinedList.Package/Images/` were generated from
 `brand-kit/logo/logo-icon-master.png` with transparent padding (tiles) and a
 teal-deep `#0C2C3A` background (splash) — regenerate them the same way if the
 mark changes, don't hand-edit the PNGs.
+
+## Continuous integration
+
+`.github/workflows/build.yml` runs on every push/PR to `main`/`dev` (and via
+manual `workflow_dispatch`), on `windows-latest`, with three jobs:
+
+- **`build-app`** — fast sanity-check `dotnet build` of the WPF app alone; the
+  other two jobs `needs:` this one so a trivial compile break fails fast
+  instead of waiting on a much slower packaging build.
+- **`build-msi`** — publishes the app, then builds the WiX MSI, uploads
+  `InterlinedList-Setup-msi` as a workflow artifact.
+- **`build-msix`** — adds `microsoft/setup-msbuild` (locates VS's MSBuild)
+  then builds the `.wapproj` directly (see above), uploads
+  `InterlinedList-Store-package` (the AppxBundle + `.msixupload`) as an
+  artifact.
+
+Both packaging jobs were debugged against real CI runs, not assumptions —
+three real, non-obvious issues surfaced and are fixed in the current state
+(don't reintroduce them):
+1. `Package.wxs` declared `ARPNOMODIFY` itself, which collides with the same
+   property already set by the `WixUI_Minimal` wixlib (`WIX0091` duplicate
+   symbol) — removed.
+2. The app project needs `<RuntimeIdentifiers>win-x64</RuntimeIdentifiers>`
+   declared (not just passed via `-r win-x64` on the CLI) — the MSIX
+   packaging project triggers a *nested* publish of it as a `ProjectReference`
+   that needs the RID available at restore time (`NETSDK1047` otherwise).
+3. `TargetPlatformVersion` in the `.wapproj` must match an SDK actually
+   installed on the runner (see above) — it drifts as GitHub updates runner
+   images, so a future image update could reintroduce this failure.
 
 ## Windows-specific rules
 

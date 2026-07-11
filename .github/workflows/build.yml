@@ -58,12 +58,6 @@ jobs:
 
       - uses: microsoft/setup-msbuild@v2
 
-      - name: List installed Windows SDK / UAP platform versions
-        shell: pwsh
-        run: |
-          Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\Platforms\UAP" -ErrorAction SilentlyContinue | Select-Object Name
-          Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\Include" -ErrorAction SilentlyContinue | Select-Object Name
-
       - name: Build MSIX package
         run: >-
           msbuild InterlinedList.Package/InterlinedList.Package.wapproj
