@@ -2,7 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
-        xmlns:models="clr-namespace:InterlinedList.Models"
+        xmlns:vm="clr-namespace:InterlinedList.ViewModels"
         Title="InterlinedList"
         Height="800" Width="1280"
         MinHeight="560" MinWidth="840"
@@ -88,7 +88,7 @@
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="220"/>  <!-- Left nav -->
                 <ColumnDefinition Width="*"/>    <!-- Feed -->
-                <ColumnDefinition Width="260"/>  <!-- Right rail -->
+                <ColumnDefinition Width="280"/>  <!-- Right rail -->
             </Grid.ColumnDefinitions>
 
             <!-- ── Left navigation ───────────────────────────────────── -->
@@ -97,143 +97,24 @@
 
                     <Button x:Name="NavFeed"    Tag="Feed"          Click="NavItem_Click"
                             Style="{StaticResource NavItemStyle}" Content="Feed"/>
-                    <Button x:Name="NavStreams" Tag="Streams"       Click="NavItem_Click"
-                            Style="{StaticResource NavItemStyle}" Content="Streams"/>
-                    <Button x:Name="NavAlerts"  Tag="Alerts"        Click="NavItem_Click"
-                            Style="{StaticResource NavItemStyle}" Content="Alerts"/>
+                    <Button x:Name="NavLists"   Tag="Lists"         Click="NavItem_Click"
+                            Style="{StaticResource NavItemStyle}" Content="Lists"/>
+                    <Button x:Name="NavDocuments" Tag="Documents"   Click="NavItem_Click"
+                            Style="{StaticResource NavItemStyle}" Content="Documents"/>
+                    <Button x:Name="NavOrganizations" Tag="Organizations" Click="NavItem_Click"
+                            Style="{StaticResource NavItemStyle}" Content="Organizations"/>
                     <Button x:Name="NavSearch"  Tag="Search"        Click="NavItem_Click"
                             Style="{StaticResource NavItemStyle}" Content="Search"/>
+                    <Button x:Name="NavAccounts" Tag="Accounts"     Click="NavItem_Click"
+                            Style="{StaticResource NavItemStyle}" Content="Accounts"/>
+                    <Button x:Name="NavAlerts"  Tag="Alerts"        Click="NavItem_Click"
+                            Style="{StaticResource NavItemStyle}" Content="Alerts"/>
 
                 </StackPanel>
             </Grid>
 
-            <!-- ── Feed ──────────────────────────────────────────────── -->
-            <Grid Grid.Column="1" Background="{DynamicResource AppBgBrush}">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="*"/>
-                </Grid.RowDefinitions>
-
-                <!-- Feed header -->
-                <Border Grid.Row="0"
-                        Background="{DynamicResource SurfaceBrush}"
-                        BorderBrush="{DynamicResource BorderBrush}"
-                        BorderThickness="0,0,0,1"
-                        Padding="20,12">
-                    <Grid>
-                        <TextBlock Text="Feed"
-                                   FontSize="17" FontWeight="SemiBold"
-                                   Foreground="{DynamicResource TextBrush}"
-                                   VerticalAlignment="Center"/>
-                        <Button Content="+ Compose"
-                                HorizontalAlignment="Right"
-                                Style="{StaticResource PrimaryBtnStyle}"/>
-                    </Grid>
-                </Border>
-
-                <!-- Post list -->
-                <ScrollViewer Grid.Row="1"
-                              VerticalScrollBarVisibility="Auto"
-                              HorizontalScrollBarVisibility="Disabled"
-                              Padding="16,12">
-                    <ItemsControl x:Name="PostList"
-                                  ItemsSource="{Binding Posts}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate DataType="{x:Type models:Post}">
-                                <Border Margin="0,0,0,8"
-                                        Background="{DynamicResource SurfaceBrush}"
-                                        BorderBrush="{DynamicResource BorderBrush}"
-                                        BorderThickness="1"
-                                        CornerRadius="4">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="4"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-
-                                        <!-- Stream color edge -->
-                                        <Border Grid.Column="0" CornerRadius="4,0,0,4">
-                                            <Border.Style>
-                                                <Style TargetType="Border">
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding Stream}" Value="Teal">
-                                                            <Setter Property="Background" Value="{StaticResource TealBrush}"/>
-                                                        </DataTrigger>
-                                                        <DataTrigger Binding="{Binding Stream}" Value="Green">
-                                                            <Setter Property="Background" Value="{StaticResource GreenBrush}"/>
-                                                        </DataTrigger>
-                                                        <DataTrigger Binding="{Binding Stream}" Value="Amber">
-                                                            <Setter Property="Background" Value="{StaticResource AmberBrush}"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </Border.Style>
-                                        </Border>
-
-                                        <!-- Card content -->
-                                        <StackPanel Grid.Column="1" Margin="12,10">
-
-                                            <!-- Header row -->
-                                            <DockPanel Margin="0,0,0,6">
-                                                <TextBlock DockPanel.Dock="Left"
-                                                           Text="{Binding Author}"
-                                                           FontSize="12" FontWeight="SemiBold"
-                                                           Foreground="{DynamicResource TextBrush}"
-                                                           Margin="0,0,8,0"/>
-                                                <Border DockPanel.Dock="Left"
-                                                        Background="{DynamicResource Surface3Brush}"
-                                                        CornerRadius="999"
-                                                        Padding="6,1"
-                                                        Margin="0,0,8,0">
-                                                    <TextBlock Text="{Binding StreamName}"
-                                                               FontSize="10" FontWeight="Medium"
-                                                               Foreground="{DynamicResource TextMutedBrush}"
-                                                               TextOptions.TextFormattingMode="Display"/>
-                                                </Border>
-                                                <!-- Live badge -->
-                                                <Border DockPanel.Dock="Left"
-                                                        Margin="0,0,8,0"
-                                                        Visibility="{Binding IsLive, Converter={StaticResource BoolToVisibility}}">
-                                                    <TextBlock Text="● LIVE"
-                                                               FontSize="9" FontWeight="Medium"
-                                                               Foreground="{StaticResource AmberBrush}"/>
-                                                </Border>
-                                                <TextBlock DockPanel.Dock="Right"
-                                                           Text="{Binding TimeFormatted}"
-                                                           FontFamily="JetBrains Mono, Consolas"
-                                                           FontSize="10"
-                                                           Foreground="{DynamicResource TextMutedBrush}"
-                                                           HorizontalAlignment="Right"/>
-                                            </DockPanel>
-
-                                            <!-- Body -->
-                                            <TextBlock Text="{Binding Body}"
-                                                       FontSize="13"
-                                                       Foreground="{DynamicResource TextBodyBrush}"
-                                                       TextWrapping="Wrap"
-                                                       LineHeight="20"
-                                                       Margin="0,0,0,8"/>
-
-                                            <!-- Footer: Dig -->
-                                            <StackPanel Orientation="Horizontal">
-                                                <Button Content="Dig"
-                                                        Style="{StaticResource DigBtnStyle}"/>
-                                                <TextBlock Text="{Binding Digs}"
-                                                           FontFamily="JetBrains Mono, Consolas"
-                                                           FontSize="10"
-                                                           Foreground="{DynamicResource TextMutedBrush}"
-                                                           VerticalAlignment="Center"
-                                                           Margin="8,0,0,0"/>
-                                            </StackPanel>
-                                        </StackPanel>
-
-                                    </Grid>
-                                </Border>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </ScrollViewer>
-            </Grid>
+            <!-- ── Center content: swapped by the left nav ──────────── -->
+            <ContentControl x:Name="CenterContent" Grid.Column="1"/>
 
             <!-- ── Right rail ─────────────────────────────────────────── -->
             <Border Grid.Column="2"
@@ -265,23 +146,98 @@
                             </StackPanel>
                         </Border>
 
-                        <!-- Trending tags -->
-                        <TextBlock Text="TRENDING"
-                                   FontSize="10" FontWeight="SemiBold"
-                                   Foreground="{DynamicResource TextMutedBrush}"
-                                   Margin="0,0,0,8"/>
+                        <!-- Profile summary (default rail content) -->
+                        <StackPanel x:Name="ProfileRail" Visibility="Visible">
+                            <Border Width="56" Height="56"
+                                    CornerRadius="999"
+                                    ClipToBounds="True"
+                                    Background="{DynamicResource Surface3Brush}"
+                                    HorizontalAlignment="Center"
+                                    Margin="0,0,0,10">
+                                <Image Source="{Binding Profile.Avatar}" Stretch="UniformToFill"/>
+                            </Border>
+                            <TextBlock Text="{Binding Profile.DisplayName}"
+                                       FontSize="14" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextBrush}"
+                                       HorizontalAlignment="Center"/>
+                            <TextBlock FontSize="12"
+                                       Foreground="{DynamicResource TextMutedBrush}"
+                                       HorizontalAlignment="Center"
+                                       Margin="0,2,0,8">
+                                <Run Text="@"/><Run Text="{Binding Profile.Username}"/>
+                            </TextBlock>
+                            <TextBlock Text="{Binding Profile.Bio}"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource TextBodyBrush}"
+                                       TextWrapping="Wrap"
+                                       TextAlignment="Center"
+                                       Margin="0,0,0,12"/>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,16">
+                                <TextBlock Margin="0,0,16,0">
+                                    <Run Text="{Binding Profile.Followers}" FontWeight="SemiBold"/>
+                                    <Run Text=" followers" Foreground="{DynamicResource TextMutedBrush}"/>
+                                </TextBlock>
+                                <TextBlock>
+                                    <Run Text="{Binding Profile.Following}" FontWeight="SemiBold"/>
+                                    <Run Text=" following" Foreground="{DynamicResource TextMutedBrush}"/>
+                                </TextBlock>
+                            </StackPanel>
+                            <Button Content="Log out"
+                                    Command="{Binding Profile.LogoutCommand}"
+                                    HorizontalAlignment="Center"
+                                    Style="{StaticResource DigBtnStyle}"/>
+                        </StackPanel>
 
-                        <ItemsControl ItemsSource="{Binding TrendingTags}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <TextBlock Text="{Binding}"
-                                               FontSize="13" FontWeight="Medium"
-                                               Foreground="{DynamicResource LinkBrush}"
-                                               Margin="0,0,0,6"
-                                               Cursor="Hand"/>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
+                        <!-- Notifications (shown via the Alerts nav item) -->
+                        <StackPanel x:Name="NotificationsRail" Visibility="Collapsed">
+                            <Grid Margin="0,0,0,10">
+                                <TextBlock Text="ALERTS"
+                                           FontSize="10" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextMutedBrush}"
+                                           VerticalAlignment="Center"/>
+                                <Button Content="Mark all read"
+                                        Command="{Binding Notifications.MarkAllReadCommand}"
+                                        HorizontalAlignment="Right"
+                                        Style="{StaticResource DigBtnStyle}"/>
+                            </Grid>
+
+                            <ItemsControl ItemsSource="{Binding Notifications.Items}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:NotificationItemViewModel}">
+                                        <Border Margin="0,0,0,8"
+                                                Background="{DynamicResource Surface2Brush}"
+                                                BorderBrush="{DynamicResource BorderBrush}"
+                                                BorderThickness="1"
+                                                CornerRadius="4"
+                                                Padding="10,8">
+                                            <StackPanel>
+                                                <DockPanel Margin="0,0,0,4">
+                                                    <Ellipse DockPanel.Dock="Left"
+                                                             Width="6" Height="6"
+                                                             Fill="{StaticResource AmberBrush}"
+                                                             Margin="0,0,6,0"
+                                                             VerticalAlignment="Center"
+                                                             Visibility="{Binding IsUnread, Converter={StaticResource BoolToVisibility}}"/>
+                                                    <TextBlock Text="{Binding TimeFormatted}"
+                                                               DockPanel.Dock="Right"
+                                                               FontFamily="JetBrains Mono, Consolas"
+                                                               FontSize="9"
+                                                               Foreground="{DynamicResource TextMutedBrush}"/>
+                                                    <TextBlock Text="{Binding Title}"
+                                                               FontSize="11" FontWeight="SemiBold"
+                                                               Foreground="{DynamicResource TextBrush}"
+                                                               TextWrapping="Wrap"/>
+                                                </DockPanel>
+                                                <TextBlock Text="{Binding Body}"
+                                                           FontSize="11"
+                                                           Foreground="{DynamicResource TextMutedBrush}"
+                                                           TextWrapping="Wrap"/>
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
 
                     </StackPanel>
                 </ScrollViewer>
@@ -393,6 +349,9 @@
                                 <Setter TargetName="Bg" Property="Background"
                                         Value="{DynamicResource PrimaryHoverBrush}"/>
                             </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Bg" Property="Opacity" Value="0.5"/>
+                            </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
@@ -423,6 +382,9 @@
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="Bg" Property="Background" Value="#1AF0A830"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Bg" Property="Opacity" Value="0.5"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>

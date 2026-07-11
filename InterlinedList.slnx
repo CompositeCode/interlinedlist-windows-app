@@ -1,3 +1,5 @@
 <Solution>
   <Project Path="InterlinedList/InterlinedList.csproj" />
+  <Project Path="installer/InterlinedList.Installer.wixproj" />
+  <Project Path="InterlinedList.Package/InterlinedList.Package.wapproj" />
 </Solution>

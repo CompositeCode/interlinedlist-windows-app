@@ -1,0 +1,25 @@
+<Project Sdk="WixToolset.Sdk/5.0.2">
+
+  <PropertyGroup>
+    <Configuration Condition="'$(Configuration)' == ''">Release</Configuration>
+    <Platform Condition="'$(Platform)' == ''">x64</Platform>
+    <OutputType>Package</OutputType>
+    <OutputName>InterlinedList-Setup</OutputName>
+
+    <!-- Published output of the WPF app that this MSI packages. Produced by the
+         PublishApp target below before the MSI is linked. -->
+    <AppPublishDir>$(MSBuildThisFileDirectory)..\InterlinedList\bin\$(Configuration)\net10.0-windows\win-x64\publish</AppPublishDir>
+    <DefineConstants>PublishDir=$(AppPublishDir)</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="WixToolset.UI.wixext" Version="5.0.2" />
+  </ItemGroup>
+
+  <!-- Publishing is a prerequisite, not a build step WiX performs itself: harvest
+       the self-contained win-x64 output straight from `dotnet publish`. -->
+  <Target Name="PublishApp" BeforeTargets="Build">
+    <Exec Command="dotnet publish &quot;$(MSBuildThisFileDirectory)..\InterlinedList\InterlinedList.csproj&quot; -c $(Configuration) -r win-x64 --self-contained -p:PublishSingleFile=false" />
+  </Target>
+
+</Project>
