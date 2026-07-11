@@ -1,0 +1,73 @@
+name: Build
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+  workflow_dispatch:
+
+jobs:
+  build-app:
+    name: Build app (sanity check)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build WPF app
+        run: dotnet build InterlinedList/InterlinedList.csproj -c Release -r win-x64
+
+  build-msi:
+    name: Build MSI installer
+    runs-on: windows-latest
+    needs: build-app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build MSI
+        run: dotnet build installer/InterlinedList.Installer.wixproj -c Release
+
+      - name: Upload MSI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: InterlinedList-Setup-msi
+          path: installer/bin/**/*.msi
+          if-no-files-found: error
+
+  build-msix:
+    name: Build MSIX (Store package)
+    runs-on: windows-latest
+    needs: build-app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - uses: microsoft/setup-msbuild@v2
+
+      - name: Build MSIX package
+        run: >-
+          msbuild InterlinedList.Package/InterlinedList.Package.wapproj
+          /restore
+          /p:Configuration=Release
+          /p:Platform=x64
+          /p:AppxBundlePlatforms=x64
+          /p:AppxBundle=Always
+          /p:UapAppxPackageBuildMode=StoreUpload
+
+      - name: Upload MSIX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: InterlinedList-Store-package
+          path: InterlinedList.Package/AppPackages/**
+          if-no-files-found: error
