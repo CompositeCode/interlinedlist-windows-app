@@ -17,7 +17,7 @@
 
     <Icon Id="InterlinedList.ico" SourceFile="..\brand-kit\icons\windows\InterlinedList.ico" />
     <Property Id="ARPPRODUCTICON" Value="InterlinedList.ico" />
-    <Property Id="ARPNOMODIFY" Value="1" />
+    <!-- ARPNOMODIFY is already set by the WixUI_Minimal wixlib below; redeclaring it here collides. -->
     <Property Id="ARPURLINFOABOUT" Value="https://interlinedlist.com" />
 
     <StandardDirectory Id="ProgramFiles64Folder">

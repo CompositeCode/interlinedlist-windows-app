@@ -16,10 +16,10 @@
     <PackageReference Include="WixToolset.UI.wixext" Version="5.0.2" />
   </ItemGroup>
 
-  <!-- Publishing is a prerequisite, not a build step WiX performs itself: harvest
-       the self-contained win-x64 output straight from `dotnet publish`. -->
-  <Target Name="PublishApp" BeforeTargets="Build">
-    <Exec Command="dotnet publish &quot;$(MSBuildThisFileDirectory)..\InterlinedList\InterlinedList.csproj&quot; -c $(Configuration) -r win-x64 --self-contained -p:PublishSingleFile=false" />
-  </Target>
+  <!-- Publishing is a prerequisite this project does NOT perform itself: WiX's
+       <Files Include> harvesting runs before any BeforeTargets="Build" hook gets
+       a chance to run (confirmed empirically in CI — a same-file auto-publish
+       target here silently never fired), so `dotnet publish` on the app project
+       must be run as a separate, earlier step. See CLAUDE.md / the CI workflow. -->
 
 </Project>

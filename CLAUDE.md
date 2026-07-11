@@ -129,11 +129,21 @@ Two independent, parallel packaging tracks — both wrap the same
 `InterlinedList/InterlinedList.csproj` build, neither depends on the other:
 
 **MSI (`installer/`)** — WiX Toolset v5 (SDK-style, NuGet-restored via
-`WixToolset.Sdk`). Build with `dotnet build installer/InterlinedList.Installer.wixproj`
-on Windows; a `PublishApp` pre-build target runs `dotnet publish -r win-x64
---self-contained` on the app first, then WiX harvests everything under
+`WixToolset.Sdk`). It's a **two-step build, not one**: publish the app first,
+then build the installer —
+
+```sh
+dotnet publish InterlinedList/InterlinedList.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=false
+dotnet build installer/InterlinedList.Installer.wixproj -c Release
+```
+
+WiX then harvests everything under
 `InterlinedList/bin/Release/net10.0-windows/win-x64/publish/**` into the MSI via
-a `<Files Include>` glob (no manual harvesting/heat step). Produces
+a `<Files Include>` glob (no manual harvesting/heat step). **A single-command
+`BeforeTargets="Build"` auto-publish target was tried and removed** — WiX's
+file harvesting runs before that hook ever fires, confirmed empirically in CI
+(the publish directory was still missing when harvesting ran), so don't
+reintroduce that pattern without verifying it actually executes. Produces
 `InterlinedList-Setup.msi` for direct download/side-loading, Start Menu
 shortcut, per-machine install under Program Files. **Before shipping:**
 replace `installer/License.rtf` with the real EULA.
