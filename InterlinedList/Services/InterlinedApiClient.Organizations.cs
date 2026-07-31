@@ -6,10 +6,11 @@ using InterlinedList.Models;
 namespace InterlinedList.Services;
 
 /// <summary>
-/// Only the top-level organization endpoints (list/get/create) are wired up
-/// here — GET api/organizations/{id}/members returned 401 with this app's
-/// bearer-token auth during live testing, so member-list/management is
-/// deliberately not implemented anywhere in this client.
+/// Organizations: browse (list/get/create) plus full member management. NOTE:
+/// GET api/organizations/{id}/members was previously documented as 401-walled
+/// for bearer auth, but re-probing live 2026-07-31 it (and add/update/remove)
+/// return 200 with the sync-token — so member management IS implemented now.
+/// Member mutations follow the read-after-write pattern (re-fetch members after).
 /// </summary>
 public sealed partial class InterlinedApiClient
 {
@@ -46,4 +47,30 @@ public sealed partial class InterlinedApiClient
         using var resp = await SendAsync(HttpMethod.Post, "api/organizations", new { name, description, isPublic }, ct);
         await EnsureSuccessAsync(resp, ct);
     }
+
+    public Task UpdateOrganizationAsync(string orgId, string name, string? description, bool isPublic, CancellationToken ct = default)
+        => SendVoidAsync(HttpMethod.Put, $"api/organizations/{orgId}", new { name, description, isPublic }, ct);
+
+    public Task DeleteOrganizationAsync(string orgId, CancellationToken ct = default)
+        => SendVoidAsync(HttpMethod.Delete, $"api/organizations/{orgId}", null, ct);
+
+    // ── Member management (bearer-authorized as of 2026-07-31) ──────────────────
+
+    public async Task<List<OrgMember>> GetOrgMembersAsync(string orgId, CancellationToken ct = default)
+    {
+        var json = await GetElementAsync($"api/organizations/{orgId}/members", ct);
+        return json.TryGetProperty("members", out var arr) && arr.ValueKind == JsonValueKind.Array
+            ? arr.Deserialize<List<OrgMember>>(JsonOptions) ?? new()
+            : new();
+    }
+
+    // Add an existing user (found via the global user search) to the org.
+    public Task AddOrgMemberAsync(string orgId, string userId, string role, CancellationToken ct = default)
+        => SendVoidAsync(HttpMethod.Post, $"api/organizations/{orgId}/members", new { userId, role }, ct);
+
+    public Task UpdateOrgMemberRoleAsync(string orgId, string userId, string role, CancellationToken ct = default)
+        => SendVoidAsync(HttpMethod.Put, $"api/organizations/{orgId}/members/{userId}", new { role }, ct);
+
+    public Task RemoveOrgMemberAsync(string orgId, string userId, CancellationToken ct = default)
+        => SendVoidAsync(HttpMethod.Delete, $"api/organizations/{orgId}/members/{userId}", null, ct);
 }

@@ -68,4 +68,36 @@ public partial class NotificationsViewModel : ObservableObject
             ErrorMessage = ex.Message;
         }
     }
+
+    [RelayCommand]
+    private async Task MarkOneReadAsync(NotificationItemViewModel item)
+    {
+        try
+        {
+            await _session.Api.MarkNotificationReadAsync(item.Id);
+            item.MarkRead();
+            UnreadCount = Items.Count(i => i.IsUnread);
+            ErrorMessage = null;
+        }
+        catch (InterlinedApiException ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+    }
+
+    [RelayCommand]
+    private async Task DeleteOneAsync(NotificationItemViewModel item)
+    {
+        try
+        {
+            await _session.Api.DeleteNotificationAsync(item.Id);
+            Items.Remove(item);
+            UnreadCount = Items.Count(i => i.IsUnread);
+            ErrorMessage = null;
+        }
+        catch (InterlinedApiException ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+    }
 }

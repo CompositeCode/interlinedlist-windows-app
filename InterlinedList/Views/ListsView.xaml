@@ -82,6 +82,31 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <!-- Subtle row action (Edit / Delete) -->
+        <Style x:Key="RowActionBtnStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="6,2"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bg" Background="{TemplateBinding Background}"
+                                CornerRadius="3" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource Surface3Brush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </UserControl.Resources>
 
     <Grid>
@@ -214,23 +239,63 @@
                           VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled"
                           Padding="20,12">
-                <ItemsControl ItemsSource="{Binding Rows}">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate DataType="{x:Type models:ListDataRow}">
-                            <Border Margin="0,0,0,6"
-                                    Background="{DynamicResource Surface2Brush}"
-                                    BorderBrush="{DynamicResource BorderBrush}"
-                                    BorderThickness="1"
-                                    CornerRadius="4"
-                                    Padding="10,8">
-                                <TextBlock Text="{Binding DisplaySummary}"
-                                           FontSize="12"
-                                           Foreground="{DynamicResource TextBodyBrush}"
-                                           TextWrapping="Wrap"/>
-                            </Border>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
+                <StackPanel>
+                    <ItemsControl ItemsSource="{Binding Rows}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type models:ListDataRow}">
+                                <Border Margin="0,0,0,6"
+                                        Background="{DynamicResource Surface2Brush}"
+                                        BorderBrush="{DynamicResource BorderBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="4"
+                                        Padding="10,8">
+                                    <DockPanel>
+                                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal"
+                                                    VerticalAlignment="Top" Margin="8,0,0,0">
+                                            <Button Content="Edit"
+                                                    Command="{Binding DataContext.StartEditRowCommand,
+                                                              RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                    CommandParameter="{Binding}"
+                                                    Style="{StaticResource RowActionBtnStyle}"/>
+                                            <Button Content="Delete"
+                                                    Command="{Binding DataContext.DeleteRowCommand,
+                                                              RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                    CommandParameter="{Binding}"
+                                                    Style="{StaticResource RowActionBtnStyle}"/>
+                                        </StackPanel>
+                                        <TextBlock Text="{Binding DisplaySummary}"
+                                                   FontSize="12"
+                                                   Foreground="{DynamicResource TextBodyBrush}"
+                                                   TextWrapping="Wrap"/>
+                                    </DockPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <!-- Inline row editor -->
+                    <Border Margin="0,4,0,0"
+                            Background="{DynamicResource Surface3Brush}"
+                            BorderBrush="{DynamicResource BorderStrongBrush}"
+                            BorderThickness="1" CornerRadius="4" Padding="10,8"
+                            Visibility="{Binding IsEditingRow, Converter={StaticResource BoolToVisibility}}">
+                        <StackPanel>
+                            <TextBlock Text="Edit row (JSON)" FontSize="11" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextBrush}" Margin="0,0,0,4"/>
+                            <TextBox Text="{Binding EditRowJson, UpdateSourceTrigger=PropertyChanged}"
+                                     Style="{StaticResource FieldStyle}"
+                                     AcceptsReturn="True" TextWrapping="Wrap"
+                                     FontFamily="JetBrains Mono, Consolas"
+                                     MinHeight="60" MaxHeight="160"/>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,6,0,0">
+                                <Button Content="Cancel" Command="{Binding CancelEditRowCommand}"
+                                        Style="{StaticResource RowActionBtnStyle}" Margin="0,0,6,0"/>
+                                <Button Content="Save" Command="{Binding SaveRowEditCommand}"
+                                        Style="{StaticResource PrimaryBtnStyle}"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
             </ScrollViewer>
 
             <!-- Add row -->

@@ -40,6 +40,17 @@ public partial class ListsViewModel : ObservableObject
     [ObservableProperty]
     private string? rowErrorMessage;
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsEditingRow))]
+    private ListDataRow? editingRow;
+
+    [ObservableProperty]
+    private string editRowJson = "";
+
+    public bool IsEditingRow => EditingRow is not null;
+
+    private static readonly JsonSerializerOptions RowEditJsonOptions = new() { WriteIndented = true };
+
     public ListsViewModel(SessionService session)
     {
         _session = session;
@@ -161,6 +172,67 @@ public partial class ListsViewModel : ObservableObject
             await _session.Api.AddListRowAsync(list.Id, parsed);
             NewRowJson = "";
             RowErrorMessage = null;
+            await LoadRowsAsync(list);
+        }
+        catch (InterlinedApiException ex)
+        {
+            RowErrorMessage = ex.Message;
+        }
+    }
+
+    [RelayCommand]
+    private void StartEditRow(ListDataRow row)
+    {
+        EditingRow = row;
+        EditRowJson = JsonSerializer.Serialize(row.RowData, RowEditJsonOptions);
+        RowErrorMessage = null;
+    }
+
+    [RelayCommand]
+    private void CancelEditRow()
+    {
+        EditingRow = null;
+        EditRowJson = "";
+    }
+
+    [RelayCommand]
+    private async Task SaveRowEditAsync()
+    {
+        if (SelectedList is not { } list || EditingRow is not { } row) return;
+
+        Dictionary<string, object?> parsed;
+        try
+        {
+            parsed = JsonSerializer.Deserialize<Dictionary<string, object?>>(EditRowJson)
+                ?? new Dictionary<string, object?>();
+        }
+        catch (JsonException)
+        {
+            RowErrorMessage = "That's not valid JSON.";
+            return;
+        }
+
+        try
+        {
+            await _session.Api.UpdateListRowAsync(list.Id, row.Id, parsed);
+            EditingRow = null;
+            EditRowJson = "";
+            RowErrorMessage = null;
+            await LoadRowsAsync(list);
+        }
+        catch (InterlinedApiException ex)
+        {
+            RowErrorMessage = ex.Message;
+        }
+    }
+
+    [RelayCommand]
+    private async Task DeleteRowAsync(ListDataRow row)
+    {
+        if (SelectedList is not { } list) return;
+        try
+        {
+            await _session.Api.DeleteListRowAsync(list.Id, row.Id);
             await LoadRowsAsync(list);
         }
         catch (InterlinedApiException ex)

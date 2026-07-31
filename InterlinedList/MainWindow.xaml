@@ -97,16 +97,22 @@
 
                     <Button x:Name="NavFeed"    Tag="Feed"          Click="NavItem_Click"
                             Style="{StaticResource NavItemStyle}" Content="Feed"/>
+                    <Button x:Name="NavMessages" Tag="Messages"     Click="NavItem_Click"
+                            Style="{StaticResource NavItemStyle}" Content="Messages"/>
                     <Button x:Name="NavLists"   Tag="Lists"         Click="NavItem_Click"
                             Style="{StaticResource NavItemStyle}" Content="Lists"/>
                     <Button x:Name="NavDocuments" Tag="Documents"   Click="NavItem_Click"
                             Style="{StaticResource NavItemStyle}" Content="Documents"/>
                     <Button x:Name="NavOrganizations" Tag="Organizations" Click="NavItem_Click"
                             Style="{StaticResource NavItemStyle}" Content="Organizations"/>
+                    <Button x:Name="NavPeople"  Tag="People"        Click="NavItem_Click"
+                            Style="{StaticResource NavItemStyle}" Content="People"/>
                     <Button x:Name="NavSearch"  Tag="Search"        Click="NavItem_Click"
                             Style="{StaticResource NavItemStyle}" Content="Search"/>
                     <Button x:Name="NavAccounts" Tag="Accounts"     Click="NavItem_Click"
                             Style="{StaticResource NavItemStyle}" Content="Accounts"/>
+                    <Button x:Name="NavSettings" Tag="Settings"     Click="NavItem_Click"
+                            Style="{StaticResource NavItemStyle}" Content="Settings"/>
                     <Button x:Name="NavAlerts"  Tag="Alerts"        Click="NavItem_Click"
                             Style="{StaticResource NavItemStyle}" Content="Alerts"/>
 
@@ -232,6 +238,18 @@
                                                            FontSize="11"
                                                            Foreground="{DynamicResource TextMutedBrush}"
                                                            TextWrapping="Wrap"/>
+                                                <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                                                    <Button Content="Read"
+                                                            Command="{Binding DataContext.Notifications.MarkOneReadCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                            CommandParameter="{Binding}"
+                                                            Style="{StaticResource DigBtnStyle}"
+                                                            Margin="0,0,6,0"
+                                                            Visibility="{Binding IsUnread, Converter={StaticResource BoolToVisibility}}"/>
+                                                    <Button Content="Delete"
+                                                            Command="{Binding DataContext.Notifications.DeleteOneCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                            CommandParameter="{Binding}"
+                                                            Style="{StaticResource DigBtnStyle}"/>
+                                                </StackPanel>
                                             </StackPanel>
                                         </Border>
                                     </DataTemplate>

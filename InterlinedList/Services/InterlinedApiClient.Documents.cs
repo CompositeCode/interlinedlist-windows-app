@@ -75,4 +75,22 @@ public sealed partial class InterlinedApiClient
             new { templateDocumentId, targetFolderId = (string?)null }, ct);
         await EnsureSuccessAsync(resp, ct);
     }
+
+    // ── Folder management ───────────────────────────────────────────────────────
+    // GetDocumentFoldersAsync (above) already returns each folder with its
+    // embedded documents; these mutate the folder tree. Request shape { name,
+    // parentId } verified against the OpenAPI spec 2026-07-31.
+
+    public Task CreateDocumentFolderAsync(string name, string? parentId = null, CancellationToken ct = default)
+        => SendVoidAsync(HttpMethod.Post, "api/documents/folders", new { name, parentId }, ct);
+
+    public Task RenameDocumentFolderAsync(string id, string name, CancellationToken ct = default)
+        => SendVoidAsync(HttpMethod.Put, $"api/documents/folders/{id}", new { name }, ct);
+
+    public Task DeleteDocumentFolderAsync(string id, CancellationToken ct = default)
+        => SendVoidAsync(HttpMethod.Delete, $"api/documents/folders/{id}", null, ct);
+
+    public Task CreateDocumentInFolderAsync(string folderId, string title, string content, CancellationToken ct = default)
+        => SendVoidAsync(HttpMethod.Post, $"api/documents/folders/{folderId}/documents",
+            new { title, content, isPublic = false }, ct);
 }

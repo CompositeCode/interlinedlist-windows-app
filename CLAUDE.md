@@ -74,31 +74,52 @@ The app talks to the real InterlinedList backend at `https://interlinedlist.com`
 (154-endpoint REST API, OpenAPI spec at `/api/openapi.json`) — there is no mock
 data layer. Auth is a long-lived bearer token from `POST /api/auth/sync-token`
 (the same mechanism the `il-sync` CLI and other native clients use — no cookie
-jar), persisted DPAPI-encrypted via `CredentialStore`. **There is no
-server-side revoke endpoint for this token** — treat `%LocalAppData%\InterlinedList\session.dat`
-as a standing credential.
+jar), persisted DPAPI-encrypted via `CredentialStore`. The token is
+long-lived, so treat `%LocalAppData%\InterlinedList\session.dat` as a standing
+credential — but note the server **does** expose session management:
+`GET /api/user/sessions` lists a user's active sync tokens and
+`DELETE /api/user/sessions/{id}` revokes one (both accept the bearer token —
+verified live 2026-07-31). An earlier revision of this file claimed no revoke
+endpoint existed; that is no longer true.
 
-Covered now: login/session restore, paginated feed, compose, Dig/Undig,
-notifications tray, profile/follow-counts rail, **Lists** (browse/create/
-delete, freeform JSON data rows — no schema/column editor, see below),
-**Documents** (personal markdown notes: root docs, folders, templates,
-create/edit/delete), **Organizations** (browse orgs you belong to + the
-public directory, create — **no member management**, see below), unified
-**Search** (messages/people/lists/documents from one box), and **Connected
-Accounts** (Bluesky/Mastodon/LinkedIn/Twitter linking + compose-time
-cross-post toggles). Still not built: Stripe billing, replies/threads,
-register/forgot-password, GitHub issue sync, per-list schema/column
-definitions, LinkedIn per-page posting targets.
+Covered now (greatly expanded in the 2026-07-31 parity build-out):
+login/session restore, paginated **feed** with compose (text + **image
+attachments**, cross-post toggles), Dig/Undig, **replies/threads**, **edit/
+delete** own posts, **report** posts, and **click-through to author profiles**;
+notifications tray with **mark-one-read / delete-one / mark-all**; **Direct
+Messages** (recipient list + thread + send); **People** (profile lookup,
+follow/unfollow, follow-request approve/reject, a user's messages,
+**block/mute/report**); **Lists** (browse/create/delete, freeform JSON data
+rows with **row edit + delete** — no schema/column editor, see below);
+**Documents** (root docs, templates, create/edit/delete + **folder CRUD /
+new-doc-in-folder**); **Organizations** (browse + create + **full member
+management**: add via search, change role, remove, edit/delete org);
+**Settings** (profile edit, avatar-from-URL, email change, notification
+preferences, blocked/muted management, **API-session list + revoke**, **CSV
+data export**); unified **Search**; and **Connected Accounts** (Bluesky/
+Mastodon/LinkedIn/Twitter linking + cross-post toggles). Still not built:
+Stripe billing UI, register/forgot-password, GitHub issue sync (endpoints work
+but the test account has no GitHub linked), per-list schema/column definitions,
+LinkedIn per-page posting targets, scheduled-post UI (the service supports
+`scheduledAt`), media *video* upload, list watchers/sharing, document sharing/
+collaborators, Materialize ("Create from…"), and account deletion UI (the
+service method exists, intentionally unsurfaced).
 
-**Two real, load-bearing constraints discovered by live-probing the API — don't
+**Load-bearing constraints discovered by live-probing the API — don't
 "fix" these without re-verifying, they're not bugs in this app:**
 
-1. **Not every endpoint accepts the bearer sync-token.** `GET/POST
-   /api/organizations/{id}/members` and `GET /api/linkedin/targets` /
-   `posting-targets` return `401` even with a valid token — that subsystem
-   requires cookie-session auth this native client doesn't have. This is why
-   Organizations has no member-management UI and Connected Accounts has no
-   LinkedIn per-page targeting.
+1. **A few endpoints only accept cookie-session auth, not the bearer
+   sync-token.** Re-probed live 2026-07-31 with the test account:
+   `GET /api/user/engagement` and `GET/PUT /api/user/dashboard-layout` return
+   `401` with a valid bearer token (Stripe billing + some `/api/auth/*` session
+   flows are the same shape). A native bearer-token client structurally can't
+   get a cookie session, so those are either browser-handoff (like OAuth) or
+   out of scope. **Correction to an earlier claim:** `GET
+   /api/organizations/{id}/members`, `GET /api/linkedin/targets`, and
+   `GET /api/linkedin/posting-targets` were *previously* documented here as
+   `401`-walled, but as of 2026-07-31 they return `200` with the bearer token —
+   member-management and LinkedIn per-page targeting **are** buildable now.
+   (Member *mutations* — POST/PUT/DELETE — still need live write-verification.)
 2. **The per-provider `GET /api/auth/{provider}/status` endpoints are a red
    herring** — they report whether the *server* has that OAuth integration
    configured, not whether *this user* has linked it. The real per-user link
@@ -117,11 +138,13 @@ engineered and is **not implemented** — data rows work fine schema-less
 verify the actual response shape against a real (test) account before typing
 it strictly, and prefer read-after-write over trusting an unverified envelope.
 
-Left nav maps to real views now: **Feed**, **Lists**, **Documents**,
-**Organizations**, **Search** (`MainWindow.xaml.cs` `NavItem_Click` swaps a
-`ContentControl` via a small per-tag cache in `_views`), **Accounts**
-(Connected Accounts), and **Alerts** (unchanged from Phase 2 — still a
-right-rail toggle, not a center view).
+Left nav maps to real views now: **Feed**, **Messages** (Direct Messages),
+**Lists**, **Documents**, **Organizations**, **People** (profiles + follow),
+**Search** (`MainWindow.xaml.cs` `NavItem_Click` swaps a `ContentControl` via a
+small per-tag cache in `_views`), **Accounts** (Connected Accounts),
+**Settings**, and **Alerts** (right-rail toggle, not a center view). Feed/search
+cards open a profile in the People tab via the `Navigator` hub
+(`Services/Navigator.cs`) → `MainWindow.OpenProfile`.
 
 ## Packaging & distribution
 

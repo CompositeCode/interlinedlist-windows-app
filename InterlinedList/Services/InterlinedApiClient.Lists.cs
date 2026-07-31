@@ -50,4 +50,24 @@ public sealed partial class InterlinedApiClient
         using var resp = await SendAsync(HttpMethod.Post, $"api/lists/{listId}/data", new { data = rowData }, ct);
         await EnsureSuccessAsync(resp, ct);
     }
+
+    // GET /api/lists/{id} returns the list metadata under a "data" envelope
+    // (verified live 2026-07-31).
+    public async Task<ListSummary> GetListAsync(string listId, CancellationToken ct = default)
+    {
+        var json = await GetElementAsync($"api/lists/{listId}", ct);
+        return json.GetProperty("data").Deserialize<ListSummary>(JsonOptions)
+            ?? throw new InterlinedApiException(200, "GET /api/lists/{id} returned no data.");
+    }
+
+    public Task UpdateListAsync(string listId, string title, string? description, CancellationToken ct = default)
+        => SendVoidAsync(HttpMethod.Put, $"api/lists/{listId}", new { title, description }, ct);
+
+    // Edit/delete of an individual row — the pieces that made rows write-once
+    // before. Same read-after-write discipline as AddListRowAsync.
+    public Task UpdateListRowAsync(string listId, string rowId, Dictionary<string, object?> rowData, CancellationToken ct = default)
+        => SendVoidAsync(HttpMethod.Put, $"api/lists/{listId}/data/{rowId}", new { data = rowData }, ct);
+
+    public Task DeleteListRowAsync(string listId, string rowId, CancellationToken ct = default)
+        => SendVoidAsync(HttpMethod.Delete, $"api/lists/{listId}/data/{rowId}", null, ct);
 }

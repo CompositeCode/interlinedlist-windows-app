@@ -1,3 +1,4 @@
+using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -61,16 +62,27 @@ public sealed partial class InterlinedApiClient
         bool publiclyVisible,
         bool crossPostToBluesky = false,
         bool crossPostToTwitter = false,
+        bool crossPostToLinkedIn = false,
         string? mastodonProviderIds = null,
+        string? parentId = null,
+        DateTimeOffset? scheduledAt = null,
+        IReadOnlyList<string>? imageUrls = null,
         CancellationToken ct = default)
     {
+        // parentId turns this into a reply; scheduledAt defers publication;
+        // imageUrls attaches already-uploaded images. All are documented request
+        // fields on POST /api/messages (OpenAPI-verified).
         using var resp = await SendAsync(HttpMethod.Post, "api/messages", new
         {
             content,
             publiclyVisible,
             crossPostToBluesky,
             crossPostToTwitter,
-            mastodonProviderIds
+            crossPostToLinkedIn,
+            mastodonProviderIds,
+            parentId,
+            scheduledAt = scheduledAt?.UtcDateTime,
+            imageUrls
         }, ct);
         await EnsureSuccessAsync(resp, ct);
     }
@@ -101,12 +113,88 @@ public sealed partial class InterlinedApiClient
         await EnsureSuccessAsync(resp, ct);
     }
 
+    public Task MarkNotificationReadAsync(string id, CancellationToken ct = default)
+        => SendVoidAsync(HttpMethod.Patch, $"api/notifications/{id}/read", new { }, ct);
+
+    public Task DeleteNotificationAsync(string id, CancellationToken ct = default)
+        => SendVoidAsync(HttpMethod.Delete, $"api/notifications/{id}", null, ct);
+
     public async Task<FollowCounts> GetFollowCountsAsync(string userId, CancellationToken ct = default)
     {
         using var resp = await SendAsync(HttpMethod.Get, $"api/follow/{userId}/counts", body: null, ct);
         await EnsureSuccessAsync(resp, ct);
         return await resp.Content.ReadFromJsonAsync<FollowCounts>(JsonOptions, ct)
             ?? throw new InterlinedApiException((int)resp.StatusCode, "GET /api/follow/{id}/counts returned no body.");
+    }
+
+    // ── Shared JSON plumbing (Phase 0) ──────────────────────────────────────────
+    // New domain partials build on these instead of re-hand-rolling the
+    // SendAsync → EnsureSuccess → ReadFromJson dance. Two write helpers exist by
+    // design: SendJsonAsync<T> for live-verified response envelopes, and
+    // SendVoidAsync for the codebase's read-after-write pattern (mutations whose
+    // body shape isn't trusted — the caller re-fetches from a GET afterward).
+
+    private async Task<T> GetJsonAsync<T>(string path, CancellationToken ct)
+    {
+        using var resp = await SendAsync(HttpMethod.Get, path, body: null, ct);
+        await EnsureSuccessAsync(resp, ct);
+        return await resp.Content.ReadFromJsonAsync<T>(JsonOptions, ct)
+            ?? throw new InterlinedApiException((int)resp.StatusCode, $"GET {path} returned no body.");
+    }
+
+    /// <summary>Read an endpoint that wraps its payload under a property (e.g. { "lists": [...] }).</summary>
+    private async Task<JsonElement> GetElementAsync(string path, CancellationToken ct)
+    {
+        using var resp = await SendAsync(HttpMethod.Get, path, body: null, ct);
+        await EnsureSuccessAsync(resp, ct);
+        return await resp.Content.ReadFromJsonAsync<JsonElement>(JsonOptions, ct);
+    }
+
+    /// <summary>Raw text body — used for CSV export endpoints.</summary>
+    private async Task<string> GetStringAsync(string path, CancellationToken ct)
+    {
+        using var resp = await SendAsync(HttpMethod.Get, path, body: null, ct);
+        await EnsureSuccessAsync(resp, ct);
+        return await resp.Content.ReadAsStringAsync(ct);
+    }
+
+    /// <summary>
+    /// multipart/form-data upload. The field name is "file" and the response is
+    /// { "url": "..." } for the image endpoints (verified live 2026-07-31).
+    /// Returns the root JSON element so callers can pull whatever key they need.
+    /// </summary>
+    private async Task<JsonElement> SendMultipartAsync(
+        string path, Stream content, string fileName, string contentType,
+        string fieldName = "file", CancellationToken ct = default)
+    {
+        using var form = new MultipartFormDataContent();
+        var fileContent = new StreamContent(content);
+        fileContent.Headers.ContentType = new MediaTypeHeaderValue(contentType);
+        form.Add(fileContent, fieldName, fileName);
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, path) { Content = form };
+        if (AccessToken is { Length: > 0 })
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AccessToken);
+
+        using var resp = await _http.SendAsync(request, ct);
+        await EnsureSuccessAsync(resp, ct);
+        return await resp.Content.ReadFromJsonAsync<JsonElement>(JsonOptions, ct);
+    }
+
+    /// <summary>Mutating call whose response body we don't parse (read-after-write pattern).</summary>
+    private async Task SendVoidAsync(HttpMethod method, string path, object? body, CancellationToken ct)
+    {
+        using var resp = await SendAsync(method, path, body, ct);
+        await EnsureSuccessAsync(resp, ct);
+    }
+
+    /// <summary>Mutating call whose response envelope IS live-verified and deserialized.</summary>
+    private async Task<T> SendJsonAsync<T>(HttpMethod method, string path, object? body, CancellationToken ct)
+    {
+        using var resp = await SendAsync(method, path, body, ct);
+        await EnsureSuccessAsync(resp, ct);
+        return await resp.Content.ReadFromJsonAsync<T>(JsonOptions, ct)
+            ?? throw new InterlinedApiException((int)resp.StatusCode, $"{method} {path} returned no body.");
     }
 
     private async Task<HttpResponseMessage> SendAsync(HttpMethod method, string path, object? body, CancellationToken ct)

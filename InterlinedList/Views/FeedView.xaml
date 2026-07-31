@@ -74,6 +74,57 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <!-- Subtle card action (Reply / Edit / Delete / Report) -->
+        <Style x:Key="CardActionBtnStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="6,2"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bg"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="3"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource Surface3Brush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Clickable author name → opens their profile -->
+        <Style x:Key="AuthorLinkBtnStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <ContentPresenter/>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="TextBlock.TextDecorations" Value="Underline"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </UserControl.Resources>
 
     <Grid>
@@ -144,11 +195,42 @@
                               VerticalAlignment="Center"/>
                 </StackPanel>
 
-                <Button Content="Post"
-                        Command="{Binding PostCommand}"
-                        HorizontalAlignment="Right"
-                        Margin="0,8,0,0"
-                        Style="{StaticResource PrimaryBtnStyle}"/>
+                <!-- Attached images (uploaded, pending post) -->
+                <ItemsControl ItemsSource="{Binding AttachedImageUrls}" Margin="0,8,0,0">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Margin="0,0,6,6" Width="52" Height="52" CornerRadius="4"
+                                    ClipToBounds="True" Background="{DynamicResource Surface3Brush}">
+                                <Grid>
+                                    <Image Source="{Binding}" Stretch="UniformToFill"/>
+                                    <Button Content="✕"
+                                            Command="{Binding DataContext.RemoveAttachmentCommand,
+                                                      RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                            CommandParameter="{Binding}"
+                                            HorizontalAlignment="Right" VerticalAlignment="Top"
+                                            Width="16" Height="16" Padding="0" FontSize="9"
+                                            Background="#99000000" Foreground="White"
+                                            BorderThickness="0" Cursor="Hand"/>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <DockPanel Margin="0,8,0,0">
+                    <Button DockPanel.Dock="Left"
+                            Content="Add image"
+                            Command="{Binding AttachImageCommand}"
+                            Style="{StaticResource DigBtnStyle}"/>
+                    <Button DockPanel.Dock="Right"
+                            Content="Post"
+                            Command="{Binding PostCommand}"
+                            HorizontalAlignment="Right"
+                            Style="{StaticResource PrimaryBtnStyle}"/>
+                </DockPanel>
             </StackPanel>
         </Border>
 
@@ -187,6 +269,15 @@
                                     BorderBrush="{DynamicResource BorderBrush}"
                                     BorderThickness="1"
                                     CornerRadius="4">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsDeleted}" Value="True">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="4"/>
@@ -220,12 +311,12 @@
                                                     Margin="0,0,8,0">
                                                 <Image Source="{Binding AvatarUrl}" Stretch="UniformToFill"/>
                                             </Border>
-                                            <TextBlock DockPanel.Dock="Left"
-                                                       Text="{Binding AuthorDisplayName}"
-                                                       FontSize="12" FontWeight="SemiBold"
-                                                       Foreground="{DynamicResource TextBrush}"
-                                                       VerticalAlignment="Center"
-                                                       Margin="0,0,6,0"/>
+                                            <Button DockPanel.Dock="Left"
+                                                    Content="{Binding AuthorDisplayName}"
+                                                    Command="{Binding OpenAuthorCommand}"
+                                                    Style="{StaticResource AuthorLinkBtnStyle}"
+                                                    VerticalAlignment="Center"
+                                                    Margin="0,0,6,0"/>
                                             <TextBlock DockPanel.Dock="Left"
                                                        Text="{Binding AuthorHandle}"
                                                        FontSize="11"
@@ -248,7 +339,20 @@
                                                    LineHeight="20"
                                                    Margin="0,0,0,8"/>
 
-                                        <!-- Footer: Dig -->
+                                        <!-- Attached images -->
+                                        <ItemsControl ItemsSource="{Binding ImageUrls}" Margin="0,0,0,8"
+                                                      Visibility="{Binding HasImages, Converter={StaticResource BoolToVisibility}}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Border Margin="0,0,0,6" CornerRadius="4"
+                                                            ClipToBounds="True" HorizontalAlignment="Left">
+                                                        <Image Source="{Binding}" Stretch="Uniform" MaxHeight="320"/>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+
+                                        <!-- Footer: Dig + actions -->
                                         <StackPanel Orientation="Horizontal">
                                             <Button Content="Dig"
                                                     Command="{Binding DigCommand}">
@@ -268,8 +372,85 @@
                                                        FontSize="10"
                                                        Foreground="{DynamicResource TextMutedBrush}"
                                                        VerticalAlignment="Center"
-                                                       Margin="8,0,0,0"/>
+                                                       Margin="8,0,12,0"/>
+                                            <Button Content="Reply" Command="{Binding StartReplyCommand}"
+                                                    Style="{StaticResource CardActionBtnStyle}"/>
+                                            <Button Content="Replies" Command="{Binding ToggleRepliesCommand}"
+                                                    Style="{StaticResource CardActionBtnStyle}"/>
+                                            <Button Content="Edit" Command="{Binding StartEditCommand}"
+                                                    Style="{StaticResource CardActionBtnStyle}"
+                                                    Visibility="{Binding IsMine, Converter={StaticResource BoolToVisibility}}"/>
+                                            <Button Content="Delete" Command="{Binding DeleteCommand}"
+                                                    Style="{StaticResource CardActionBtnStyle}"
+                                                    Visibility="{Binding IsMine, Converter={StaticResource BoolToVisibility}}"/>
+                                            <Button Content="Report" Command="{Binding ReportCommand}"
+                                                    Style="{StaticResource CardActionBtnStyle}"
+                                                    Visibility="{Binding CanReport, Converter={StaticResource BoolToVisibility}}"/>
                                         </StackPanel>
+
+                                        <!-- Inline edit -->
+                                        <StackPanel Margin="0,8,0,0"
+                                                    Visibility="{Binding IsEditing, Converter={StaticResource BoolToVisibility}}">
+                                            <TextBox Text="{Binding EditText, UpdateSourceTrigger=PropertyChanged}"
+                                                     AcceptsReturn="True" TextWrapping="Wrap"
+                                                     MinHeight="44" Padding="8,6" FontSize="13"
+                                                     Background="{DynamicResource Surface2Brush}"
+                                                     Foreground="{DynamicResource TextBodyBrush}"
+                                                     BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"/>
+                                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,6,0,0">
+                                                <Button Content="Cancel" Command="{Binding CancelEditCommand}"
+                                                        Style="{StaticResource CardActionBtnStyle}" Margin="0,0,6,0"/>
+                                                <Button Content="Save" Command="{Binding SaveEditCommand}"
+                                                        Style="{StaticResource PrimaryBtnStyle}"/>
+                                            </StackPanel>
+                                        </StackPanel>
+
+                                        <!-- Reply composer -->
+                                        <StackPanel Margin="0,8,0,0"
+                                                    Visibility="{Binding IsComposingReply, Converter={StaticResource BoolToVisibility}}">
+                                            <TextBox Text="{Binding ReplyText, UpdateSourceTrigger=PropertyChanged}"
+                                                     AcceptsReturn="True" TextWrapping="Wrap"
+                                                     MinHeight="44" Padding="8,6" FontSize="13"
+                                                     Background="{DynamicResource Surface2Brush}"
+                                                     Foreground="{DynamicResource TextBodyBrush}"
+                                                     BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"/>
+                                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,6,0,0">
+                                                <Button Content="Cancel" Command="{Binding CancelReplyCommand}"
+                                                        Style="{StaticResource CardActionBtnStyle}" Margin="0,0,6,0"/>
+                                                <Button Content="Reply" Command="{Binding PostReplyCommand}"
+                                                        Style="{StaticResource PrimaryBtnStyle}"/>
+                                            </StackPanel>
+                                        </StackPanel>
+
+                                        <!-- Replies -->
+                                        <ItemsControl ItemsSource="{Binding Replies}" Margin="12,8,0,0"
+                                                      Visibility="{Binding AreRepliesVisible, Converter={StaticResource BoolToVisibility}}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate DataType="{x:Type vm:MessageItemViewModel}">
+                                                    <Border Margin="0,0,0,6"
+                                                            Background="{DynamicResource Surface2Brush}"
+                                                            BorderBrush="{DynamicResource BorderBrush}"
+                                                            BorderThickness="1" CornerRadius="3" Padding="10,8">
+                                                        <StackPanel>
+                                                            <DockPanel Margin="0,0,0,4">
+                                                                <TextBlock DockPanel.Dock="Left" Text="{Binding AuthorDisplayName}"
+                                                                           FontSize="11" FontWeight="SemiBold"
+                                                                           Foreground="{DynamicResource TextBrush}" Margin="0,0,6,0"/>
+                                                                <TextBlock DockPanel.Dock="Left" Text="{Binding AuthorHandle}"
+                                                                           FontSize="10" Foreground="{DynamicResource TextMutedBrush}"/>
+                                                                <TextBlock DockPanel.Dock="Right" Text="{Binding TimeFormatted}"
+                                                                           FontFamily="JetBrains Mono, Consolas" FontSize="10"
+                                                                           Foreground="{DynamicResource TextMutedBrush}"
+                                                                           HorizontalAlignment="Right"/>
+                                                            </DockPanel>
+                                                            <TextBlock Text="{Binding Content}" FontSize="12"
+                                                                       Foreground="{DynamicResource TextBodyBrush}"
+                                                                       TextWrapping="Wrap" LineHeight="18"/>
+                                                        </StackPanel>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
                                     </StackPanel>
 
                                 </Grid>

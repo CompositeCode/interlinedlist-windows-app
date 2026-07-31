@@ -24,6 +24,9 @@ public partial class MainWindow : Window
 
         Profile.LoggedOut += (_, _) => LoggedOut?.Invoke(this, EventArgs.Empty);
 
+        // Feed/search cards raise this to open a user's profile in the People tab.
+        Navigator.OnOpenProfile = OpenProfile;
+
         StartClock();
 
         _ = Notifications.LoadCommand.ExecuteAsync(null);
@@ -60,6 +63,16 @@ public partial class MainWindow : Window
         CenterContent.Content = ViewFor(tag);
     }
 
+    // Navigator.OnOpenProfile → switch to the People tab and load the given user.
+    private void OpenProfile(string username)
+    {
+        NotificationsRail.Visibility = Visibility.Collapsed;
+        ProfileRail.Visibility = Visibility.Visible;
+        var view = (Views.PeopleView)ViewFor("People");
+        CenterContent.Content = view;
+        view.LoadProfile(username);
+    }
+
     private UserControl ViewFor(string tag)
     {
         if (_views.TryGetValue(tag, out var existing)) return existing;
@@ -67,11 +80,14 @@ public partial class MainWindow : Window
         UserControl view = tag switch
         {
             "Feed" => new FeedView(),
+            "Messages" => new DirectMessagesView(),
             "Lists" => new ListsView(),
             "Documents" => new DocumentsView(),
             "Organizations" => new OrganizationsView(),
+            "People" => new PeopleView(),
             "Search" => new SearchView(),
             "Accounts" => new ConnectedAccountsView(),
+            "Settings" => new SettingsView(),
             _ => new FeedView(),
         };
 

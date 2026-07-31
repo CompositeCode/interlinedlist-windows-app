@@ -1,7 +1,9 @@
 using System.Collections.ObjectModel;
+using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using InterlinedList.Services;
+using Microsoft.Win32;
 
 namespace InterlinedList.ViewModels;
 
@@ -52,10 +54,59 @@ public partial class FeedViewModel : ObservableObject
     [ObservableProperty]
     private bool crossPostToMastodon;
 
+    // Images uploaded for the next post (URLs returned by the upload endpoint).
+    public ObservableCollection<string> AttachedImageUrls { get; } = new();
+
+    [ObservableProperty]
+    private bool isUploadingImage;
+
     public FeedViewModel(SessionService session)
     {
         _session = session;
+        AttachedImageUrls.CollectionChanged += (_, _) => PostCommand.NotifyCanExecuteChanged();
     }
+
+    [RelayCommand]
+    private async Task AttachImageAsync()
+    {
+        var dlg = new OpenFileDialog
+        {
+            Filter = "Images (*.png;*.jpg;*.jpeg;*.gif;*.webp)|*.png;*.jpg;*.jpeg;*.gif;*.webp",
+            Multiselect = false
+        };
+        if (dlg.ShowDialog() != true) return;
+
+        IsUploadingImage = true;
+        try
+        {
+            var contentType = Path.GetExtension(dlg.FileName).ToLowerInvariant() switch
+            {
+                ".png" => "image/png",
+                ".gif" => "image/gif",
+                ".webp" => "image/webp",
+                _ => "image/jpeg",
+            };
+            await using var stream = File.OpenRead(dlg.FileName);
+            var url = await _session.Api.UploadMessageImageAsync(stream, Path.GetFileName(dlg.FileName), contentType);
+            AttachedImageUrls.Add(url);
+            ErrorMessage = null;
+        }
+        catch (InterlinedApiException ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        catch (IOException ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsUploadingImage = false;
+        }
+    }
+
+    [RelayCommand]
+    private void RemoveAttachment(string url) => AttachedImageUrls.Remove(url);
 
     [RelayCommand]
     private async Task LoadCrossPostOptionsAsync()
@@ -127,7 +178,7 @@ public partial class FeedViewModel : ObservableObject
         }
     }
 
-    private bool CanPost() => !IsPosting && !string.IsNullOrWhiteSpace(ComposeText);
+    private bool CanPost() => !IsPosting && (!string.IsNullOrWhiteSpace(ComposeText) || AttachedImageUrls.Count > 0);
 
     [RelayCommand(CanExecute = nameof(CanPost))]
     private async Task PostAsync()
@@ -140,11 +191,13 @@ public partial class FeedViewModel : ObservableObject
                 _session.CurrentUser?.DefaultPubliclyVisible ?? true,
                 crossPostToBluesky: CrossPostToBluesky,
                 crossPostToTwitter: CrossPostToTwitter,
-                mastodonProviderIds: CrossPostToMastodon ? MastodonProvider : null);
+                mastodonProviderIds: CrossPostToMastodon ? MastodonProvider : null,
+                imageUrls: AttachedImageUrls.Count > 0 ? AttachedImageUrls.ToList() : null);
             ComposeText = "";
             CrossPostToBluesky = false;
             CrossPostToTwitter = false;
             CrossPostToMastodon = false;
+            AttachedImageUrls.Clear();
             await RefreshAsync();
         }
         catch (InterlinedApiException ex)

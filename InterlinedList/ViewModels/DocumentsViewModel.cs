@@ -35,6 +35,24 @@ public partial class DocumentsViewModel : ObservableObject
     [ObservableProperty]
     private string editContent = "";
 
+    // ── Folder management ─────────────────────────────────────────
+    [ObservableProperty]
+    private string newFolderName = "";
+
+    // The folder currently being renamed inline (null when no inline editor is open).
+    [ObservableProperty]
+    private DocumentFolder? editingFolder;
+
+    [ObservableProperty]
+    private string editingFolderName = "";
+
+    // The folder currently receiving a new document inline (null when closed).
+    [ObservableProperty]
+    private DocumentFolder? addingDocFolder;
+
+    [ObservableProperty]
+    private string newFolderDocTitle = "";
+
     public DocumentsViewModel(SessionService session)
     {
         _session = session;
@@ -156,7 +174,132 @@ public partial class DocumentsViewModel : ObservableObject
         }
     }
 
+    // ── Folder management commands ────────────────────────────────
+
+    private bool CanCreateFolder() => !string.IsNullOrWhiteSpace(NewFolderName);
+
+    [RelayCommand(CanExecute = nameof(CanCreateFolder))]
+    private async Task CreateFolderAsync()
+    {
+        try
+        {
+            await _session.Api.CreateDocumentFolderAsync(NewFolderName.Trim());
+            NewFolderName = "";
+            ErrorMessage = null;
+            await LoadAsync();
+        }
+        catch (InterlinedApiException ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+    }
+
+    [RelayCommand]
+    private void StartRenameFolder(DocumentFolder folder)
+    {
+        EditingFolder = folder;
+        EditingFolderName = folder.Name;
+    }
+
+    [RelayCommand]
+    private void CancelRenameFolder()
+    {
+        EditingFolder = null;
+        EditingFolderName = "";
+    }
+
+    private bool CanSaveRenameFolder() => EditingFolder is not null && !string.IsNullOrWhiteSpace(EditingFolderName);
+
+    [RelayCommand(CanExecute = nameof(CanSaveRenameFolder))]
+    private async Task SaveRenameFolderAsync()
+    {
+        if (EditingFolder is not { } folder) return;
+
+        try
+        {
+            await _session.Api.RenameDocumentFolderAsync(folder.Id, EditingFolderName.Trim());
+            EditingFolder = null;
+            EditingFolderName = "";
+            ErrorMessage = null;
+            await LoadAsync();
+        }
+        catch (InterlinedApiException ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+    }
+
+    [RelayCommand]
+    private async Task DeleteFolderAsync(DocumentFolder folder)
+    {
+        try
+        {
+            await _session.Api.DeleteDocumentFolderAsync(folder.Id);
+            if (EditingFolder == folder)
+            {
+                EditingFolder = null;
+                EditingFolderName = "";
+            }
+            if (AddingDocFolder == folder)
+            {
+                AddingDocFolder = null;
+                NewFolderDocTitle = "";
+            }
+            ErrorMessage = null;
+            await LoadAsync();
+        }
+        catch (InterlinedApiException ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+    }
+
+    [RelayCommand]
+    private void StartAddDocToFolder(DocumentFolder folder)
+    {
+        AddingDocFolder = folder;
+        NewFolderDocTitle = "";
+    }
+
+    [RelayCommand]
+    private void CancelAddDocToFolder()
+    {
+        AddingDocFolder = null;
+        NewFolderDocTitle = "";
+    }
+
+    private bool CanSaveDocToFolder() => AddingDocFolder is not null && !string.IsNullOrWhiteSpace(NewFolderDocTitle);
+
+    [RelayCommand(CanExecute = nameof(CanSaveDocToFolder))]
+    private async Task SaveDocToFolderAsync()
+    {
+        if (AddingDocFolder is not { } folder) return;
+
+        try
+        {
+            await _session.Api.CreateDocumentInFolderAsync(folder.Id, NewFolderDocTitle.Trim(), "");
+            AddingDocFolder = null;
+            NewFolderDocTitle = "";
+            ErrorMessage = null;
+            await LoadAsync();
+        }
+        catch (InterlinedApiException ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+    }
+
     partial void OnNewDocTitleChanged(string value) => CreateDocumentCommand.NotifyCanExecuteChanged();
 
     partial void OnSelectedDocumentChanged(DocumentSummary? value) => SaveDocumentCommand.NotifyCanExecuteChanged();
+
+    partial void OnNewFolderNameChanged(string value) => CreateFolderCommand.NotifyCanExecuteChanged();
+
+    partial void OnEditingFolderChanged(DocumentFolder? value) => SaveRenameFolderCommand.NotifyCanExecuteChanged();
+
+    partial void OnEditingFolderNameChanged(string value) => SaveRenameFolderCommand.NotifyCanExecuteChanged();
+
+    partial void OnAddingDocFolderChanged(DocumentFolder? value) => SaveDocToFolderCommand.NotifyCanExecuteChanged();
+
+    partial void OnNewFolderDocTitleChanged(string value) => SaveDocToFolderCommand.NotifyCanExecuteChanged();
 }
