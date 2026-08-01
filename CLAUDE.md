@@ -47,6 +47,8 @@ InterlinedList/
     InterlinedApiClient.CrossPost.cs     (partial class: linked-identity/OAuth helpers)
     InterlinedApiException.cs
     CredentialStore.cs            (DPAPI-encrypted sync-token persistence)
+    AppLog.cs                     (file + Windows Event Log diagnostics; wired to global
+                                   crash handlers in App.xaml.cs — see Logging below)
     SessionService.cs             (login/logout/restore, exposes CurrentUser)
     AppServices.cs                 (process-lifetime singletons: Api, Session)
   ViewModels/                    (CommunityToolkit.Mvvm ObservableObject + [RelayCommand])
@@ -58,6 +60,20 @@ InterlinedList/
                                    `DataContext = new XyzViewModel(AppServices.Session)` in its
                                    own constructor, not injected by MainWindow)
     FeedView, ListsView, DocumentsView, OrganizationsView, SearchView, ConnectedAccountsView
+InterlinedList.Sync.Core/          (net10.0, PLATFORM-NEUTRAL — builds & unit-tests on macOS)
+  SyncEngine.cs                     (bidirectional pull/push; folder-tree materialization)
+  SqliteSyncStateStore.cs           (SQLite state.db: doc/folder↔path ledger + delta cursor)
+  FileMapper.cs / PathSanitizer.cs  (folderId→subdir mapping, filename safety, conflict paths)
+  ConflictResolver.cs               (server-wins truth table → .conflict-<ts>.md)
+  HttpDocumentSyncClient.cs         (the ~7 documents endpoints, incl. GET /api/documents/sync)
+  Abstractions.cs / Models.cs       (IDocumentSyncClient, ICredentialSource, ISyncStateStore, DTOs)
+InterlinedList.Sync/               (net10.0-windows WinExe — the system-tray background agent)
+  Program.cs / TrayApplication.cs   (Hardcodet NotifyIcon tray, menu, no main window)
+  SyncCoordinator.cs / FolderWatcher.cs (poll loop + FileSystemWatcher, all engine calls gated)
+  DpapiCredentialSource.cs          (reads the SAME session.dat the main app writes)
+  AutoStartManager.cs / SyncLog.cs  (HKCU Run toggle; file + Event Log diagnostics)
+  SignInWindow.cs / SettingsWindow.cs (code-only WPF dialogs)
+InterlinedList.Sync.Core.Tests/    (xUnit — 38 tests, run on macOS/CI)
 installer/
   InterlinedList.Installer.wixproj  (WiX v5 SDK project → classic .msi)
   Package.wxs                       (product/feature/shortcut definition)
@@ -67,6 +83,56 @@ InterlinedList.Package/
   Package.appxmanifest              (Store identity, visual elements, capabilities)
   Images/                           (tile/splash assets generated from brand-kit logo)
 ```
+
+## Document synchronization utility (Obsidian sync)
+
+A background **system-tray** utility (`InterlinedList.Sync`) keeps a local folder of
+`.md` files bidirectionally in sync with the user's InterlinedList **documents**, so a
+tool like **Obsidian** can edit them. It's installed and auto-started *with* the main
+app (see Packaging). Design decisions and the full plan live in `synch-plan.md`.
+
+- **Two projects, deliberate split.** `InterlinedList.Sync.Core` is `net10.0`
+  **platform-neutral** (no WPF, no DPAPI) so the engine builds and unit-tests on
+  macOS/CI. `InterlinedList.Sync` is the `net10.0-windows` WPF tray host that owns all
+  Windows-only concerns (tray UI, DPAPI token read, `FileSystemWatcher`, HKCU autostart).
+- **Vendored-from, not referenced.** The engine's design is ported from the sibling
+  repo `CompositeCode/interlinedlist-synchronization` (`windows/`, MIT), but rebuilt to
+  this repo's conventions and extended with **folder-tree mirroring** (that repo is flat).
+  It does **not** reference the WPF app — it has its own minimal `HttpDocumentSyncClient`.
+- **Unified auth = shared token, not shared code.** The utility reads the SAME
+  DPAPI-encrypted `%LocalAppData%\InterlinedList\session.dat` the main app writes
+  (`DpapiCredentialSource`), so signing in once in either place works for both. Its own
+  sign-in (`AuthClient`) writes back to that same file.
+- **Sync model.** Pull = `GET /api/documents/sync?lastSyncAt=` delta; folders become real
+  subdirectories; server wins conflicts (local kept as `<stem>.conflict-<ts>.md`). Push =
+  `FileSystemWatcher` (500ms debounce) → create/update/delete, creating server folders on
+  demand. A **full-snapshot reconcile every 20th poll** covers the API's unreliable delete
+  tombstones. Its own SQLite `state.db` (not the app's — separate process) is the ledger;
+  **all engine calls are serialized through one gate** (the SQLite connection isn't
+  thread-safe). **Load-bearing risk:** moving a doc between folders pushes `folderId` on
+  `PATCH /api/documents/{id}`, which is **not yet live-verified** — see `synch-plan.md`.
+- **Not a Windows Service** — a per-user login-launched tray process (session-0 services
+  can't show a tray icon or read the per-user DPAPI token).
+
+## Logging & diagnostics
+
+Both processes log to disk and best-effort to the **Windows Event Log** (Event Viewer →
+Windows Logs → Application), so an installed build that fails to start is diagnosable
+rather than silent:
+
+- **Main app:** `Services/AppLog.cs` → `%LocalAppData%\InterlinedList\logs\app-*.log`,
+  Event Log source `InterlinedList`. `App.xaml.cs` installs global handlers
+  (`DispatcherUnhandledException`, `AppDomain.UnhandledException`,
+  `TaskScheduler.UnobservedTaskException`), wraps `OnStartup`, and shows a dialog pointing
+  at the log on a startup failure. **This fixed a real "installs but won't run" crash:**
+  `SessionService.TryRestoreSessionAsync` only caught `InterlinedApiException`, so a
+  network/timeout/JSON error while validating a saved token escaped the `async void`
+  `OnStartup` and killed the process before any window showed — now caught, logged, and it
+  falls back to the login window.
+- **Sync utility:** `SyncLog.cs` → `%LocalAppData%\InterlinedList\sync\logs\sync-*.log`,
+  Event Log source `InterlinedListSync`.
+- **Event Log sources are created by the MSI** (elevated); the apps run `asInvoker` and
+  can only *write* to an existing source, so file logging is the always-available fallback.
 
 ## API integration
 
@@ -157,6 +223,8 @@ then build the installer —
 
 ```sh
 dotnet publish InterlinedList/InterlinedList.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=false
+# the sync tray utility publishes into the SAME payload folder (shares the runtime):
+dotnet publish InterlinedList.Sync/InterlinedList.Sync.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=false -o InterlinedList/bin/Release/net10.0-windows/win-x64/publish
 dotnet build installer/InterlinedList.Installer.wixproj -c Release
 ```
 
@@ -168,7 +236,12 @@ file harvesting runs before that hook ever fires, confirmed empirically in CI
 (the publish directory was still missing when harvesting ran), so don't
 reintroduce that pattern without verifying it actually executes. Produces
 `InterlinedList-Setup.msi` for direct download/side-loading, Start Menu
-shortcut, per-machine install under Program Files. **Before shipping:**
+shortcuts (app **and** sync utility), per-machine install under Program Files.
+Because the sync utility publishes into the same folder, the recursive glob picks
+up `InterlinedList.Sync.exe` automatically; `Package.wxs` adds three registry-only
+components: a **HKCU `Run` autostart** for the sync utility and two **Event Log
+sources** (`InterlinedList`, `InterlinedListSync`) — the elevated install creates
+them so the `asInvoker` apps can write to Event Viewer. **Before shipping:**
 replace `installer/License.rtf` with the real EULA.
 
 **MSIX (`InterlinedList.Package/`)** — classic Desktop Bridge "Windows
@@ -208,16 +281,27 @@ Image assets in `InterlinedList.Package/Images/` were generated from
 teal-deep `#0C2C3A` background (splash) — regenerate them the same way if the
 mark changes, don't hand-edit the PNGs.
 
+The `.wapproj` references **both** `InterlinedList.csproj` and
+`InterlinedList.Sync.csproj`, so the MSIX bundles both executables. The manifest
+declares a second `<Application Id="InterlinedListSync">` plus a
+`windows.startupTask` extension (the `uap5` namespace; the MSIX equivalent of the
+MSI's `Run` key) that auto-launches the sync utility at login. The Sync project
+declares `<RuntimeIdentifiers>win-x64</RuntimeIdentifiers>` for the same
+nested-publish reason the main app does (`NETSDK1047`).
+
 ## Continuous integration
 
 `.github/workflows/build.yml` runs on every push/PR to `main`/`dev` (and via
 manual `workflow_dispatch`), on `windows-latest`, with three jobs:
 
-- **`build-app`** — fast sanity-check `dotnet build` of the WPF app alone; the
-  other two jobs `needs:` this one so a trivial compile break fails fast
-  instead of waiting on a much slower packaging build.
-- **`build-msi`** — publishes the app, then builds the WiX MSI, uploads
-  `InterlinedList-Setup-msi` as a workflow artifact.
+- **`build-app`** — fast sanity-check `dotnet build` of the WPF app, plus the
+  sync engine + tray utility, and `dotnet test` of `InterlinedList.Sync.Core.Tests`
+  (the engine is platform-neutral so its tests run here); the other two jobs
+  `needs:` this one so a trivial compile break fails fast instead of waiting on a
+  much slower packaging build.
+- **`build-msi`** — publishes the app **and the sync utility** (into the same
+  payload folder), then builds the WiX MSI, uploads `InterlinedList-Setup-msi` as
+  a workflow artifact.
 - **`build-msix`** — adds `microsoft/setup-msbuild` (locates VS's MSBuild)
   then builds the `.wapproj` directly (see above), uploads
   `InterlinedList-Store-package` (the AppxBundle + `.msixupload`) as an

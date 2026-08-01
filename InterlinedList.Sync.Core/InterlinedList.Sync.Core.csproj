@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Platform-neutral sync engine. Deliberately NOT net*-windows and NOT WPF so
+       it builds AND unit-tests on macOS/Linux (CI + local dev). All Windows-only
+       concerns (DPAPI token, tray UI, autostart, FileSystemWatcher host) live in
+       the InterlinedList.Sync tray project that references this one. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>InterlinedList.Sync.Core</AssemblyName>
+    <RootNamespace>InterlinedList.Sync.Core</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.10" />
+    <!-- Override the vulnerable SQLitePCLRaw.lib.e_sqlite3 2.1.11 that Microsoft.Data.Sqlite
+         pulls transitively (NU1903 / GHSA-2m69-gcr7-jv3q) with the patched bundle. -->
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.5" />
+  </ItemGroup>
+
+</Project>
