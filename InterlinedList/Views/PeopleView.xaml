@@ -336,6 +336,41 @@
                         </StackPanel>
                     </Border>
 
+                    <!-- Mutual connections -->
+                    <StackPanel Margin="0,0,0,12"
+                                Visibility="{Binding HasMutuals, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Text="Mutual connections"
+                                   FontSize="12" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextBrush}" Margin="0,0,0,6"/>
+                        <ItemsControl ItemsSource="{Binding Mutuals}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Button Command="{Binding DataContext.OpenUserCommand,
+                                                      RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            CommandParameter="{Binding}"
+                                            Background="Transparent" BorderThickness="0" Cursor="Hand"
+                                            Margin="0,0,6,6" Padding="0">
+                                        <Border Background="{DynamicResource Surface2Brush}"
+                                                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                                                CornerRadius="3" Padding="8,4">
+                                            <StackPanel Orientation="Horizontal">
+                                                <Border Width="18" Height="18" CornerRadius="999" ClipToBounds="True"
+                                                        Background="{DynamicResource Surface3Brush}" Margin="0,0,6,0">
+                                                    <Image Source="{Binding Avatar}" Stretch="UniformToFill"/>
+                                                </Border>
+                                                <TextBlock Text="{Binding DisplayNameOrUsername}" FontSize="11"
+                                                           Foreground="{DynamicResource TextBodyBrush}" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                        </Border>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+
                     <!-- Recent messages -->
                     <ItemsControl ItemsSource="{Binding Messages}">
                         <ItemsControl.ItemTemplate>

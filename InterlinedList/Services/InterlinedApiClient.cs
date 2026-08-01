@@ -67,11 +67,12 @@ public sealed partial class InterlinedApiClient
         string? parentId = null,
         DateTimeOffset? scheduledAt = null,
         IReadOnlyList<string>? imageUrls = null,
+        IReadOnlyList<string>? videoUrls = null,
         CancellationToken ct = default)
     {
         // parentId turns this into a reply; scheduledAt defers publication;
-        // imageUrls attaches already-uploaded images. All are documented request
-        // fields on POST /api/messages (OpenAPI-verified).
+        // image/videoUrls attach already-uploaded media. All are documented
+        // request fields on POST /api/messages (OpenAPI-verified).
         using var resp = await SendAsync(HttpMethod.Post, "api/messages", new
         {
             content,
@@ -82,7 +83,8 @@ public sealed partial class InterlinedApiClient
             mastodonProviderIds,
             parentId,
             scheduledAt = scheduledAt?.UtcDateTime,
-            imageUrls
+            imageUrls,
+            videoUrls
         }, ct);
         await EnsureSuccessAsync(resp, ct);
     }

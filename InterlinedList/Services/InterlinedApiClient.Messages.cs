@@ -57,4 +57,22 @@ public sealed partial class InterlinedApiClient
             ? u
             : throw new InterlinedApiException(200, "Image upload returned no url.");
     }
+
+    /// <summary>Upload a video; same multipart shape as image upload (field "file" → { url }).</summary>
+    public async Task<string> UploadMessageVideoAsync(Stream content, string fileName, string contentType, CancellationToken ct = default)
+    {
+        var json = await SendMultipartAsync("api/messages/videos/upload", content, fileName, contentType, ct: ct);
+        return json.TryGetProperty("url", out var url) && url.GetString() is { Length: > 0 } u
+            ? u
+            : throw new InterlinedApiException(200, "Video upload returned no url.");
+    }
+
+    /// <summary>GET /api/messages/scheduled → the current user's not-yet-published posts ({ messages }).</summary>
+    public async Task<List<Message>> GetScheduledMessagesAsync(CancellationToken ct = default)
+    {
+        var json = await GetElementAsync("api/messages/scheduled", ct);
+        return json.TryGetProperty("messages", out var arr) && arr.ValueKind == JsonValueKind.Array
+            ? arr.Deserialize<List<Message>>(JsonOptions) ?? new()
+            : new();
+    }
 }

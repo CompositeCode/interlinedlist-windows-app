@@ -146,11 +146,17 @@
                            FontSize="17" FontWeight="SemiBold"
                            Foreground="{DynamicResource TextBrush}"
                            VerticalAlignment="Center"/>
-                <TextBlock Text="Loading…"
-                           HorizontalAlignment="Right"
-                           FontSize="12"
-                           Foreground="{DynamicResource TextMutedBrush}"
-                           Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibility}}"/>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <TextBlock Text="Loading…"
+                               FontSize="12"
+                               Foreground="{DynamicResource TextMutedBrush}"
+                               VerticalAlignment="Center"
+                               Margin="0,0,10,0"
+                               Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibility}}"/>
+                    <Button Content="{Binding ScheduledToggleLabel}"
+                            Command="{Binding ToggleScheduledCommand}"
+                            Style="{StaticResource CardActionBtnStyle}"/>
+                </StackPanel>
             </Grid>
         </Border>
 
@@ -220,15 +226,58 @@
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
 
-                <DockPanel Margin="0,8,0,0">
+                <!-- Attached videos (uploaded, pending post) -->
+                <ItemsControl ItemsSource="{Binding AttachedVideoUrls}" Margin="0,6,0,0">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Margin="0,0,0,4" Background="{DynamicResource Surface3Brush}"
+                                    CornerRadius="3" Padding="8,4">
+                                <DockPanel>
+                                    <Button DockPanel.Dock="Right" Content="✕"
+                                            Command="{Binding DataContext.RemoveVideoAttachmentCommand,
+                                                      RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                            CommandParameter="{Binding}"
+                                            Style="{StaticResource CardActionBtnStyle}"/>
+                                    <TextBlock Text="🎬 video attached" FontSize="11"
+                                               Foreground="{DynamicResource TextBodyBrush}" VerticalAlignment="Center"/>
+                                </DockPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <!-- Schedule -->
+                <StackPanel Orientation="Horizontal" Margin="0,8,0,0" VerticalAlignment="Center">
+                    <CheckBox Content="Schedule"
+                              IsChecked="{Binding IsScheduling}"
+                              Foreground="{DynamicResource TextMutedBrush}"
+                              FontSize="12" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <DatePicker SelectedDate="{Binding ScheduleDate}" Width="130"
+                                VerticalAlignment="Center" Margin="0,0,8,0"
+                                Visibility="{Binding IsScheduling, Converter={StaticResource BoolToVisibility}}"/>
+                    <TextBox Text="{Binding ScheduleTime, UpdateSourceTrigger=PropertyChanged}"
+                             Width="56" VerticalAlignment="Center" Padding="6,3"
+                             Background="{DynamicResource SurfaceBrush}" Foreground="{DynamicResource TextBodyBrush}"
+                             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                             Visibility="{Binding IsScheduling, Converter={StaticResource BoolToVisibility}}"/>
+                    <TextBlock Text="local HH:mm" FontSize="10" VerticalAlignment="Center" Margin="6,0,0,0"
+                               Foreground="{DynamicResource TextMutedBrush}"
+                               Visibility="{Binding IsScheduling, Converter={StaticResource BoolToVisibility}}"/>
+                </StackPanel>
+
+                <DockPanel Margin="0,8,0,0" LastChildFill="False">
                     <Button DockPanel.Dock="Left"
                             Content="Add image"
                             Command="{Binding AttachImageCommand}"
                             Style="{StaticResource DigBtnStyle}"/>
+                    <Button DockPanel.Dock="Left"
+                            Content="Add video"
+                            Command="{Binding AttachVideoCommand}"
+                            Style="{StaticResource DigBtnStyle}"
+                            Margin="6,0,0,0"/>
                     <Button DockPanel.Dock="Right"
                             Content="Post"
                             Command="{Binding PostCommand}"
-                            HorizontalAlignment="Right"
                             Style="{StaticResource PrimaryBtnStyle}"/>
                 </DockPanel>
             </StackPanel>
@@ -260,6 +309,17 @@
                       HorizontalScrollBarVisibility="Disabled"
                       Padding="16,12">
             <StackPanel>
+              <!-- Normal feed (hidden while viewing scheduled) -->
+              <StackPanel>
+                <StackPanel.Style>
+                    <Style TargetType="StackPanel">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding ShowScheduled}" Value="True">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </StackPanel.Style>
                 <ItemsControl x:Name="FeedList"
                               ItemsSource="{Binding Messages}">
                     <ItemsControl.ItemTemplate>
@@ -348,6 +408,21 @@
                                                             ClipToBounds="True" HorizontalAlignment="Left">
                                                         <Image Source="{Binding}" Stretch="Uniform" MaxHeight="320"/>
                                                     </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+
+                                        <!-- Attached videos (open in browser) -->
+                                        <ItemsControl ItemsSource="{Binding VideoUrls}" Margin="0,0,0,8"
+                                                      Visibility="{Binding HasVideos, Converter={StaticResource BoolToVisibility}}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Button Content="🎬 Play video"
+                                                            Command="{Binding DataContext.OpenVideoCommand,
+                                                                      RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                            CommandParameter="{Binding}"
+                                                            Style="{StaticResource CardActionBtnStyle}"
+                                                            HorizontalAlignment="Left"/>
                                                 </DataTemplate>
                                             </ItemsControl.ItemTemplate>
                                         </ItemsControl>
@@ -465,6 +540,32 @@
                         Margin="0,4,0,16"
                         Style="{StaticResource DigBtnStyle}"
                         Visibility="{Binding HasMore, Converter={StaticResource BoolToVisibility}}"/>
+              </StackPanel>
+
+              <!-- Scheduled posts (shown via the header toggle) -->
+              <StackPanel Visibility="{Binding ShowScheduled, Converter={StaticResource BoolToVisibility}}">
+                  <TextBlock Text="Scheduled posts"
+                             FontSize="13" FontWeight="SemiBold"
+                             Foreground="{DynamicResource TextBrush}"
+                             Margin="0,0,0,8"/>
+                  <ItemsControl ItemsSource="{Binding ScheduledMessages}">
+                      <ItemsControl.ItemTemplate>
+                          <DataTemplate DataType="{x:Type vm:MessageItemViewModel}">
+                              <Border Margin="0,0,0,8"
+                                      Background="{DynamicResource SurfaceBrush}"
+                                      BorderBrush="{DynamicResource BorderBrush}"
+                                      BorderThickness="1" CornerRadius="4" Padding="12,10">
+                                  <StackPanel>
+                                      <TextBlock Text="⏱ Scheduled" FontSize="10" FontWeight="SemiBold"
+                                                 Foreground="{StaticResource AmberBrush}" Margin="0,0,0,4"/>
+                                      <TextBlock Text="{Binding Content}" FontSize="13"
+                                                 Foreground="{DynamicResource TextBodyBrush}" TextWrapping="Wrap"/>
+                                  </StackPanel>
+                              </Border>
+                          </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+              </StackPanel>
             </StackPanel>
         </ScrollViewer>
     </Grid>

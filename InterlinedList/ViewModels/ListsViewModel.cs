@@ -15,6 +15,10 @@ public partial class ListsViewModel : ObservableObject
 
     public ObservableCollection<ListSummary> Lists { get; } = new();
     public ObservableCollection<ListDataRow> Rows { get; } = new();
+    public ObservableCollection<WatchedList> SharedWithMe { get; } = new();
+    public ObservableCollection<ShareLink> ShareLinks { get; } = new();
+    public ObservableCollection<Collaborator> Watchers { get; } = new();
+    public ObservableCollection<UserSearchResult> WatcherSearchResults { get; } = new();
 
     [ObservableProperty]
     private bool isLoading;
@@ -32,6 +36,12 @@ public partial class ListsViewModel : ObservableObject
     private ListSummary? selectedList;
 
     [ObservableProperty]
+    private bool isViewingShared;
+
+    [ObservableProperty]
+    private WatchedList? selectedSharedList;
+
+    [ObservableProperty]
     private bool isLoadingRows;
 
     [ObservableProperty]
@@ -46,6 +56,9 @@ public partial class ListsViewModel : ObservableObject
 
     [ObservableProperty]
     private string editRowJson = "";
+
+    [ObservableProperty]
+    private string watcherSearchQuery = "";
 
     public bool IsEditingRow => EditingRow is not null;
 
@@ -109,6 +122,10 @@ public partial class ListsViewModel : ObservableObject
             {
                 SelectedList = null;
                 Rows.Clear();
+                ShareLinks.Clear();
+                Watchers.Clear();
+                WatcherSearchResults.Clear();
+                WatcherSearchQuery = "";
             }
             await LoadListsAsync();
         }
@@ -119,18 +136,188 @@ public partial class ListsViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private async Task SelectListAsync(ListSummary list)
+    private async Task LoadSharedAsync()
     {
-        SelectedList = list;
-        await LoadRowsAsync(list);
+        try
+        {
+            var shared = await _session.Api.GetWatchingListsAsync();
+
+            SharedWithMe.Clear();
+            foreach (var list in shared)
+                SharedWithMe.Add(list);
+
+            ErrorMessage = null;
+        }
+        catch (InterlinedApiException ex)
+        {
+            ErrorMessage = ex.Message;
+        }
     }
 
-    private async Task LoadRowsAsync(ListSummary list)
+    [RelayCommand]
+    private async Task SelectListAsync(ListSummary list)
+    {
+        IsViewingShared = false;
+        SelectedSharedList = null;
+        SelectedList = list;
+        WatcherSearchQuery = "";
+        WatcherSearchResults.Clear();
+        await LoadRowsAsync(list.Id);
+        await LoadShareLinksAsync(list.Id);
+        await LoadWatchersAsync(list.Id);
+    }
+
+    [RelayCommand]
+    private async Task SelectSharedListAsync(WatchedList watched)
+    {
+        IsViewingShared = true;
+        SelectedList = null;
+        SelectedSharedList = watched;
+        EditingRow = null;
+        EditRowJson = "";
+        ShareLinks.Clear();
+        Watchers.Clear();
+        WatcherSearchResults.Clear();
+        WatcherSearchQuery = "";
+        await LoadRowsAsync(watched.Id);
+    }
+
+    private async Task LoadShareLinksAsync(string listId)
+    {
+        try
+        {
+            var links = await _session.Api.GetListShareLinksAsync(listId);
+
+            ShareLinks.Clear();
+            foreach (var link in links)
+                ShareLinks.Add(link);
+        }
+        catch (InterlinedApiException ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+    }
+
+    private bool CanManageShareLinks() => SelectedList is not null && !IsViewingShared;
+
+    [RelayCommand(CanExecute = nameof(CanManageShareLinks))]
+    private async Task CreateShareLinkAsync()
+    {
+        if (SelectedList is not { } list) return;
+        try
+        {
+            await _session.Api.CreateListShareLinkAsync(list.Id);
+            await LoadShareLinksAsync(list.Id);
+        }
+        catch (InterlinedApiException ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+    }
+
+    [RelayCommand]
+    private async Task RevokeShareLinkAsync(ShareLink link)
+    {
+        if (SelectedList is not { } list) return;
+        try
+        {
+            await _session.Api.DeleteListShareLinkAsync(list.Id, link.Token);
+            await LoadShareLinksAsync(list.Id);
+        }
+        catch (InterlinedApiException ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+    }
+
+    [RelayCommand]
+    private void CopyShareLink(ShareLink link)
+    {
+        if (string.IsNullOrEmpty(link.Url)) return;
+        System.Windows.Clipboard.SetText(link.Url);
+    }
+
+    // ── Watchers (per-user shared access to an own list) ────────────────────────
+
+    private async Task LoadWatchersAsync(string listId)
+    {
+        try
+        {
+            var watchers = await _session.Api.GetListWatchersAsync(listId);
+
+            Watchers.Clear();
+            foreach (var watcher in watchers)
+                Watchers.Add(watcher);
+        }
+        catch (InterlinedApiException ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+    }
+
+    private bool CanManageWatchers() => SelectedList is not null && !IsViewingShared;
+
+    [RelayCommand(CanExecute = nameof(CanManageWatchers))]
+    private async Task SearchWatcherUsersAsync()
+    {
+        if (SelectedList is not { } list) return;
+        if (string.IsNullOrWhiteSpace(WatcherSearchQuery)) return;
+        try
+        {
+            var users = await _session.Api.SearchListWatcherUsersAsync(list.Id, WatcherSearchQuery.Trim());
+
+            WatcherSearchResults.Clear();
+            foreach (var user in users)
+                WatcherSearchResults.Add(user);
+
+            ErrorMessage = null;
+        }
+        catch (InterlinedApiException ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(CanManageWatchers))]
+    private async Task AddWatcherAsync(UserSearchResult user)
+    {
+        if (SelectedList is not { } list) return;
+        try
+        {
+            await _session.Api.AddListWatcherAsync(list.Id, user.Id);
+            WatcherSearchQuery = "";
+            WatcherSearchResults.Clear();
+            await LoadWatchersAsync(list.Id);
+            ErrorMessage = null;
+        }
+        catch (InterlinedApiException ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(CanManageWatchers))]
+    private async Task RemoveWatcherAsync(Collaborator watcher)
+    {
+        if (SelectedList is not { } list) return;
+        try
+        {
+            await _session.Api.RemoveListWatcherAsync(list.Id, watcher.UserId);
+            await LoadWatchersAsync(list.Id);
+            ErrorMessage = null;
+        }
+        catch (InterlinedApiException ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+    }
+
+    private async Task LoadRowsAsync(string listId)
     {
         IsLoadingRows = true;
         try
         {
-            var page = await _session.Api.GetListDataAsync(list.Id, limit: PageSize, offset: 0);
+            var page = await _session.Api.GetListDataAsync(listId, limit: PageSize, offset: 0);
 
             Rows.Clear();
             foreach (var row in page.Rows)
@@ -172,7 +359,7 @@ public partial class ListsViewModel : ObservableObject
             await _session.Api.AddListRowAsync(list.Id, parsed);
             NewRowJson = "";
             RowErrorMessage = null;
-            await LoadRowsAsync(list);
+            await LoadRowsAsync(list.Id);
         }
         catch (InterlinedApiException ex)
         {
@@ -218,7 +405,7 @@ public partial class ListsViewModel : ObservableObject
             EditingRow = null;
             EditRowJson = "";
             RowErrorMessage = null;
-            await LoadRowsAsync(list);
+            await LoadRowsAsync(list.Id);
         }
         catch (InterlinedApiException ex)
         {
@@ -233,7 +420,7 @@ public partial class ListsViewModel : ObservableObject
         try
         {
             await _session.Api.DeleteListRowAsync(list.Id, row.Id);
-            await LoadRowsAsync(list);
+            await LoadRowsAsync(list.Id);
         }
         catch (InterlinedApiException ex)
         {
@@ -243,7 +430,22 @@ public partial class ListsViewModel : ObservableObject
 
     partial void OnNewListTitleChanged(string value) => CreateListCommand.NotifyCanExecuteChanged();
 
-    partial void OnSelectedListChanged(ListSummary? value) => AddRowCommand.NotifyCanExecuteChanged();
+    partial void OnSelectedListChanged(ListSummary? value)
+    {
+        AddRowCommand.NotifyCanExecuteChanged();
+        CreateShareLinkCommand.NotifyCanExecuteChanged();
+        SearchWatcherUsersCommand.NotifyCanExecuteChanged();
+        AddWatcherCommand.NotifyCanExecuteChanged();
+        RemoveWatcherCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnIsViewingSharedChanged(bool value)
+    {
+        CreateShareLinkCommand.NotifyCanExecuteChanged();
+        SearchWatcherUsersCommand.NotifyCanExecuteChanged();
+        AddWatcherCommand.NotifyCanExecuteChanged();
+        RemoveWatcherCommand.NotifyCanExecuteChanged();
+    }
 
     partial void OnNewRowJsonChanged(string value) => AddRowCommand.NotifyCanExecuteChanged();
 }

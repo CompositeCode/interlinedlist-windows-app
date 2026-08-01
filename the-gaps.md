@@ -115,6 +115,115 @@ billing, register/forgot-password) are tracked below as post-v1.
 
 ---
 
+## Progress — Session 4 (2026-08-01) — media, scheduling, DM depth, sharing
+
+Verified last shapes live (video upload multipart field **`file`** → `{url}`;
+DM image upload same; I **can read a shared list's rows** with the bearer token).
+App builds clean in Debug + Release.
+
+**Shipped this session:**
+- ✅ **Scheduled posts** — compose date/time picker + a header toggle showing
+  your scheduled posts (`GET /api/messages/scheduled`, post with `scheduledAt`).
+- ✅ **Video upload** on posts — attach from disk, chips in compose, "🎬 Play
+  video" link in cards (opens in browser).
+- ✅ **Direct Messages depth** *(sub-agent)* — image attachments (upload +
+  display), trash/restore own messages, and **5-second live polling** of the
+  open thread (`.../updates`, deduped by id).
+- ✅ **Lists "Shared with me"** *(sub-agent)* — lists others shared with you
+  (`GET /api/lists/watching`), read-only row viewing.
+- Services: video upload, scheduled fetch, DM image/restore/updates, `videoUrls`
+  on compose, `GetWatchingListsAsync`.
+
+**Remaining post-v1:** list watcher *management* + share-link creation (empty
+data on the test account — needs a second account to verify), document sharing/
+collaborators, Materialize, GitHub (needs GitHub linked), billing handoff,
+register/forgot-password, account-deletion UI, DM inbox-folder view.
+
+---
+
+## Progress — Session 5 (2026-08-01) — sharing + auth self-service
+
+Live-verified share-link shape (POST → `{token,url,role,expiresAt}`, GET →
+`{shareLinks:[…]}`, DELETE by token; created+deleted a real test link). App
+builds clean in Debug + Release.
+
+**Shipped this session:**
+- ✅ **Public share links** for **Lists** and **Documents** — create / list /
+  revoke / copy-URL, gated to items you own.
+- ✅ **Auth self-service** — **Register** (email/username/password/display name)
+  and **Forgot password** in the login window (mode toggle + reset request).
+- Services: `RegisterAsync`, `ForgotPasswordAsync`, list + document share-link
+  create/list/delete, `ShareLink` model.
+
+**Remaining post-v1:** watcher/collaborator *member* management (undocumented
+request bodies + empty data — needs a second account), Materialize, GitHub
+(needs GitHub linked), billing handoff, account-deletion UI, DM inbox-folder,
+mutual-follows display, per-list schema/columns.
+
+---
+
+## Progress — Session 6 (2026-08-01) — collaboration + profile depth
+
+Live-verified watcher/collaborator shapes (`POST {userId,role}`→201, `GET`→
+`{watchers|collaborators:[{id,userId,role,createdAt,user}]}`, `DELETE …/{userId}`,
+plus `/users?q=` search — added + removed real test edges). Builds clean
+Debug + Release.
+
+**Shipped this session:**
+- ✅ **List watchers** — invite users to a list you own (via search), list, remove.
+- ✅ **Document collaborators** — same for documents.
+- ✅ **Mutual connections** on a profile (People) — chips that open that user.
+- ✅ **Manage account on the web** handoff (Settings) — billing/subscription is
+  cookie-only server-side, so we hand off to the site (like OAuth linking).
+- Services: list watcher + doc collaborator CRUD + user-search, `Collaborator`
+  model, `GetMutualAsync` surfaced.
+
+**Materialize** stays deferred — its request is a single opaque `source` string;
+not enough to build reliably without more API detail.
+
+**Remaining post-v1:** Materialize, GitHub (needs GitHub linked on the account),
+account-deletion UI (destructive — intentionally deferred), DM inbox-folder view,
+per-list schema/columns, a full standalone notifications view.
+
+---
+
+## Progress — Session 7 (2026-08-01) — account deletion + parity assessment
+
+- ✅ **Account deletion** — a guarded "Danger zone" in Settings (type your exact
+  username to enable), calling `POST /api/user/delete {username,email}`, then
+  clearing the token and returning the shell to the login screen (via a new
+  `Navigator.OnLoggedOut` hook). Builds clean Debug + Release.
+
+### ✅ Effective feature parity reached
+Every core, verifiable, user-facing product surface is now built (feed +
+media + replies + scheduling, DMs with media/polling, People + full follow
+graph + moderation, Settings incl. sessions/exports/account, Lists + rows +
+folders + sharing + watchers, Documents + folders + sharing + collaborators,
+Organizations + members, Search, Connected Accounts, auth self-service).
+
+**The only remaining gaps are genuinely blocked, not merely unbuilt:**
+- **Materialize** ("Create from…") — the API request is a single opaque
+  `source` string with no documented structure; can't be built reliably without
+  more API detail. *API-blocked.*
+- **Per-list schema/columns DSL** (`PUT /api/lists/{id}/schema`) — only partially
+  reverse-engineered; schema-less rows are the confirmed-working path (see
+  CLAUDE.md). *API-blocked.*
+- **GitHub issue sync** — the test account has no GitHub linked (every
+  `/api/github/*` call returns "GitHub account not linked") and the wire shapes
+  aren't documented, so it can't be verified. *Verification-blocked* — build it
+  once an account with GitHub linked is available.
+- **DM inbox-folder view** — `GET /api/dm` item shape can't be learned without
+  sending real DMs to a real person; DMs already work via the recipients list.
+  *Low value / verification-blocked.*
+- **Billing UI** — Stripe endpoints are cookie-session-only; handled by the
+  "Manage account on the web" handoff. *Auth-model-blocked (by design.)*
+
+To close the verification-blocked items, provision **(a)** a second test account
+(two-sided DM/follow/moderation/sharing checks) and **(b)** GitHub linked on a
+test account. Everything else is either shipped or API-limited.
+
+---
+
 ## 1. Parity snapshot by domain
 
 | Domain (product's name) | Web/API has | App has today | Status |

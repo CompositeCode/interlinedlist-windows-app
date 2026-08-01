@@ -93,4 +93,46 @@ public sealed partial class InterlinedApiClient
     public Task CreateDocumentInFolderAsync(string folderId, string title, string content, CancellationToken ct = default)
         => SendVoidAsync(HttpMethod.Post, $"api/documents/folders/{folderId}/documents",
             new { title, content, isPublic = false }, ct);
+
+    // ── Share links (create a public read link for a document) ──────────────────
+    // Same shape as list share-links (verified live 2026-08-01).
+
+    public async Task<List<ShareLink>> GetDocumentShareLinksAsync(string documentId, CancellationToken ct = default)
+    {
+        var json = await GetElementAsync($"api/documents/{documentId}/share-links", ct);
+        return json.TryGetProperty("shareLinks", out var arr) && arr.ValueKind == JsonValueKind.Array
+            ? arr.Deserialize<List<ShareLink>>(JsonOptions) ?? new()
+            : new();
+    }
+
+    public Task<ShareLink> CreateDocumentShareLinkAsync(string documentId, CancellationToken ct = default)
+        => SendJsonAsync<ShareLink>(HttpMethod.Post, $"api/documents/{documentId}/share-links", new { }, ct);
+
+    public Task DeleteDocumentShareLinkAsync(string documentId, string token, CancellationToken ct = default)
+        => SendVoidAsync(HttpMethod.Delete, $"api/documents/{documentId}/share-links/{token}", null, ct);
+
+    // ── Collaborators (per-user shared access to a document) ────────────────────
+    // Same shape as list watchers (verified live 2026-08-01).
+
+    public async Task<List<Collaborator>> GetDocumentCollaboratorsAsync(string documentId, CancellationToken ct = default)
+    {
+        var json = await GetElementAsync($"api/documents/{documentId}/collaborators", ct);
+        return json.TryGetProperty("collaborators", out var arr) && arr.ValueKind == JsonValueKind.Array
+            ? arr.Deserialize<List<Collaborator>>(JsonOptions) ?? new()
+            : new();
+    }
+
+    public Task AddDocumentCollaboratorAsync(string documentId, string userId, string role = "watcher", CancellationToken ct = default)
+        => SendVoidAsync(HttpMethod.Post, $"api/documents/{documentId}/collaborators", new { userId, role }, ct);
+
+    public Task RemoveDocumentCollaboratorAsync(string documentId, string userId, CancellationToken ct = default)
+        => SendVoidAsync(HttpMethod.Delete, $"api/documents/{documentId}/collaborators/{userId}", null, ct);
+
+    public async Task<List<UserSearchResult>> SearchCollaboratorUsersAsync(string documentId, string query, CancellationToken ct = default)
+    {
+        var json = await GetElementAsync($"api/documents/{documentId}/collaborators/users?q={Uri.EscapeDataString(query)}", ct);
+        return json.TryGetProperty("users", out var arr) && arr.ValueKind == JsonValueKind.Array
+            ? arr.Deserialize<List<UserSearchResult>>(JsonOptions) ?? new()
+            : new();
+    }
 }

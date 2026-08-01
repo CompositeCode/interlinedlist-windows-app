@@ -37,9 +37,21 @@ public partial class LoginWindow : Window
 
     private async Task SubmitAsync()
     {
-        var succeeded = await _viewModel.LoginAsync(PasswordInput.Password);
+        var succeeded = _viewModel.IsRegisterMode
+            ? await _viewModel.RegisterAsync(PasswordInput.Password)
+            : await _viewModel.LoginAsync(PasswordInput.Password);
         if (succeeded)
             LoginSucceeded?.Invoke(this, EventArgs.Empty);
+    }
+
+    private async void BtnForgot_Click(object sender, RoutedEventArgs e)
+        => await _viewModel.ForgotPasswordAsync();
+
+    private void BtnToggleMode_Click(object sender, RoutedEventArgs e)
+    {
+        _viewModel.IsRegisterMode = !_viewModel.IsRegisterMode;
+        RegisterFields.Visibility = _viewModel.IsRegisterMode ? Visibility.Visible : Visibility.Collapsed;
+        BtnLogin.Content = _viewModel.PrimaryButtonText;
     }
 
     private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -54,7 +66,9 @@ public partial class LoginWindow : Window
 
             case nameof(LoginViewModel.IsBusy):
                 BtnLogin.IsEnabled = !_viewModel.IsBusy;
-                BtnLogin.Content = _viewModel.IsBusy ? "Logging in…" : "Log In";
+                BtnLogin.Content = _viewModel.IsBusy
+                    ? "Working…"
+                    : _viewModel.PrimaryButtonText;
                 break;
         }
     }

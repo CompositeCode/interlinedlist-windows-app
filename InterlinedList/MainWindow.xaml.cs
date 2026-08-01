@@ -26,6 +26,8 @@ public partial class MainWindow : Window
 
         // Feed/search cards raise this to open a user's profile in the People tab.
         Navigator.OnOpenProfile = OpenProfile;
+        // Account deletion (Settings) routes back to the login screen through here.
+        Navigator.OnLoggedOut = () => LoggedOut?.Invoke(this, EventArgs.Empty);
 
         StartClock();
 

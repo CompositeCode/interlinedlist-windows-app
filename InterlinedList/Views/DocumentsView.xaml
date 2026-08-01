@@ -101,6 +101,16 @@
                 </DataTrigger>
             </Style.Triggers>
         </Style>
+
+        <!-- Share panel: visible only when a document IS selected -->
+        <Style x:Key="SharePanelStyle" TargetType="Border">
+            <Setter Property="Visibility" Value="Visible"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding SelectedDocument}" Value="{x:Null}">
+                    <Setter Property="Visibility" Value="Collapsed"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
     </UserControl.Resources>
 
     <Grid>
@@ -369,6 +379,8 @@
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="*"/>
                 <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
             <Border Grid.Row="0"
@@ -411,6 +423,187 @@
                            Foreground="{DynamicResource TextMutedBrush}"
                            Margin="0,8,0,0"/>
             </StackPanel>
+
+            <!-- ── Share panel: public read links for the open document ── -->
+            <Border Grid.Row="4"
+                    Style="{StaticResource SharePanelStyle}"
+                    Background="{DynamicResource SurfaceBrush}"
+                    BorderBrush="{DynamicResource BorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="4"
+                    Margin="20,0,20,20"
+                    Padding="16,12">
+                <StackPanel>
+                    <DockPanel Margin="0,0,0,8">
+                        <TextBlock DockPanel.Dock="Left"
+                                   Text="Share"
+                                   FontSize="14" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextBrush}"
+                                   VerticalAlignment="Center"/>
+                        <Button Content="Create share link"
+                                Command="{Binding CreateShareLinkCommand}"
+                                HorizontalAlignment="Right"
+                                Style="{StaticResource PrimaryBtnStyle}"/>
+                    </DockPanel>
+
+                    <TextBlock Text="Anyone with a link below can read this document."
+                               FontSize="11"
+                               Foreground="{DynamicResource TextMutedBrush}"
+                               TextWrapping="Wrap"
+                               Margin="0,0,0,8"/>
+
+                    <ItemsControl ItemsSource="{Binding ShareLinks}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type models:ShareLink}">
+                                <Border Margin="0,0,0,8"
+                                        Background="{DynamicResource Surface2Brush}"
+                                        BorderBrush="{DynamicResource BorderBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="4"
+                                        Padding="10,8">
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding Url}"
+                                                   FontSize="12"
+                                                   FontFamily="JetBrains Mono, Consolas"
+                                                   Foreground="{DynamicResource TextMutedBrush}"
+                                                   TextWrapping="Wrap"
+                                                   Margin="0,0,0,6"/>
+                                        <DockPanel>
+                                            <TextBlock DockPanel.Dock="Left"
+                                                       Text="{Binding RoleLabel}"
+                                                       FontSize="11" FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource TextMutedBrush}"
+                                                       VerticalAlignment="Center"/>
+                                            <StackPanel Orientation="Horizontal"
+                                                        HorizontalAlignment="Right">
+                                                <Button Content="Copy"
+                                                        Command="{Binding DataContext.CopyShareLinkCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                        CommandParameter="{Binding}"
+                                                        Style="{StaticResource SmallBtnStyle}"/>
+                                                <Button Content="Revoke"
+                                                        Command="{Binding DataContext.RevokeShareLinkCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                        CommandParameter="{Binding}"
+                                                        Style="{StaticResource SmallBtnStyle}"/>
+                                            </StackPanel>
+                                        </DockPanel>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+
+            <!-- ── Collaborators panel: invite/list/remove people on the open document ── -->
+            <Border Grid.Row="5"
+                    Style="{StaticResource SharePanelStyle}"
+                    Background="{DynamicResource SurfaceBrush}"
+                    BorderBrush="{DynamicResource BorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="4"
+                    Margin="20,0,20,20"
+                    Padding="16,12">
+                <StackPanel>
+                    <TextBlock Text="Collaborators"
+                               FontSize="14" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextBrush}"
+                               Margin="0,0,0,8"/>
+
+                    <TextBlock Text="Invite people to collaborate on this document."
+                               FontSize="11"
+                               Foreground="{DynamicResource TextMutedBrush}"
+                               TextWrapping="Wrap"
+                               Margin="0,0,0,8"/>
+
+                    <!-- Search for users to invite -->
+                    <DockPanel Margin="0,0,0,8">
+                        <Button DockPanel.Dock="Right"
+                                Content="Search"
+                                Command="{Binding SearchCollaboratorUsersCommand}"
+                                Style="{StaticResource PrimaryBtnStyle}"
+                                Margin="8,0,0,0"/>
+                        <TextBox Text="{Binding CollaboratorSearchQuery, UpdateSourceTrigger=PropertyChanged}"
+                                 Style="{StaticResource FieldStyle}"
+                                 Margin="0"
+                                 Tag="Search people"/>
+                    </DockPanel>
+
+                    <!-- Search results: candidates to add -->
+                    <ItemsControl ItemsSource="{Binding CollaboratorSearchResults}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type models:UserSearchResult}">
+                                <Border Margin="0,0,0,6"
+                                        Background="{DynamicResource Surface2Brush}"
+                                        BorderBrush="{DynamicResource BorderBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="4"
+                                        Padding="10,8">
+                                    <DockPanel>
+                                        <Button DockPanel.Dock="Right"
+                                                Content="Add"
+                                                Command="{Binding DataContext.AddCollaboratorCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                CommandParameter="{Binding}"
+                                                Style="{StaticResource SmallBtnStyle}"
+                                                Margin="8,0,0,0"
+                                                VerticalAlignment="Center"/>
+                                        <StackPanel VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding DisplayName}"
+                                                       FontSize="13" FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource TextBrush}"
+                                                       TextWrapping="Wrap"/>
+                                            <TextBlock Text="{Binding Username}"
+                                                       FontSize="11"
+                                                       Foreground="{DynamicResource TextMutedBrush}"
+                                                       TextWrapping="Wrap"/>
+                                        </StackPanel>
+                                    </DockPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <!-- Current collaborators -->
+                    <TextBlock Text="CURRENT COLLABORATORS" FontSize="10" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextMutedBrush}" Margin="0,6,0,6"/>
+                    <ItemsControl ItemsSource="{Binding Collaborators}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type models:Collaborator}">
+                                <Border Margin="0,0,0,6"
+                                        Background="{DynamicResource Surface2Brush}"
+                                        BorderBrush="{DynamicResource BorderBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="4"
+                                        Padding="10,8">
+                                    <DockPanel>
+                                        <Button DockPanel.Dock="Right"
+                                                Content="Remove"
+                                                Command="{Binding DataContext.RemoveCollaboratorCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                CommandParameter="{Binding}"
+                                                Style="{StaticResource SmallBtnStyle}"
+                                                Margin="8,0,0,0"
+                                                VerticalAlignment="Center"/>
+                                        <StackPanel VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding DisplayNameOrUsername}"
+                                                       FontSize="13" FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource TextBrush}"
+                                                       TextWrapping="Wrap"/>
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="{Binding Handle}"
+                                                           FontSize="11"
+                                                           Foreground="{DynamicResource TextMutedBrush}"/>
+                                                <TextBlock Text="{Binding RoleLabel}"
+                                                           FontSize="11" FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource TextMutedBrush}"
+                                                           Margin="8,0,0,0"/>
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </DockPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
         </Grid>
     </Grid>
 </UserControl>

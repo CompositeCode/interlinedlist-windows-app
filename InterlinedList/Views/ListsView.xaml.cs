@@ -11,5 +11,6 @@ public partial class ListsView : UserControl
         var vm = new ListsViewModel(Services.AppServices.Session);
         DataContext = vm;
         _ = vm.LoadListsCommand.ExecuteAsync(null);
+        _ = vm.LoadSharedCommand.ExecuteAsync(null);
     }
 }

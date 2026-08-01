@@ -70,4 +70,61 @@ public sealed partial class InterlinedApiClient
 
     public Task DeleteListRowAsync(string listId, string rowId, CancellationToken ct = default)
         => SendVoidAsync(HttpMethod.Delete, $"api/lists/{listId}/data/{rowId}", null, ct);
+
+    /// <summary>
+    /// Lists owned by others that have been shared with the current user
+    /// (GET /api/lists/watching → { lists, pagination }). Their rows are readable
+    /// via <see cref="GetListDataAsync"/> (access is granted server-side).
+    /// </summary>
+    public async Task<List<WatchedList>> GetWatchingListsAsync(CancellationToken ct = default)
+    {
+        var json = await GetElementAsync("api/lists/watching", ct);
+        return json.TryGetProperty("lists", out var arr) && arr.ValueKind == JsonValueKind.Array
+            ? arr.Deserialize<List<WatchedList>>(JsonOptions) ?? new()
+            : new();
+    }
+
+    // ── Share links (create a public read link for a list) ──────────────────────
+    // Shape verified live 2026-08-01: GET → { shareLinks }, POST → the new link,
+    // DELETE …/{token} revokes it.
+
+    public async Task<List<ShareLink>> GetListShareLinksAsync(string listId, CancellationToken ct = default)
+    {
+        var json = await GetElementAsync($"api/lists/{listId}/share-links", ct);
+        return json.TryGetProperty("shareLinks", out var arr) && arr.ValueKind == JsonValueKind.Array
+            ? arr.Deserialize<List<ShareLink>>(JsonOptions) ?? new()
+            : new();
+    }
+
+    public Task<ShareLink> CreateListShareLinkAsync(string listId, CancellationToken ct = default)
+        => SendJsonAsync<ShareLink>(HttpMethod.Post, $"api/lists/{listId}/share-links", new { }, ct);
+
+    public Task DeleteListShareLinkAsync(string listId, string token, CancellationToken ct = default)
+        => SendVoidAsync(HttpMethod.Delete, $"api/lists/{listId}/share-links/{token}", null, ct);
+
+    // ── Watchers (per-user shared access to a list) ─────────────────────────────
+    // Shapes verified live 2026-08-01: GET → { watchers }, POST { userId, role }
+    // → 201, DELETE …/{userId}. Role defaults to "watcher".
+
+    public async Task<List<Collaborator>> GetListWatchersAsync(string listId, CancellationToken ct = default)
+    {
+        var json = await GetElementAsync($"api/lists/{listId}/watchers", ct);
+        return json.TryGetProperty("watchers", out var arr) && arr.ValueKind == JsonValueKind.Array
+            ? arr.Deserialize<List<Collaborator>>(JsonOptions) ?? new()
+            : new();
+    }
+
+    public Task AddListWatcherAsync(string listId, string userId, string role = "watcher", CancellationToken ct = default)
+        => SendVoidAsync(HttpMethod.Post, $"api/lists/{listId}/watchers", new { userId, role }, ct);
+
+    public Task RemoveListWatcherAsync(string listId, string userId, CancellationToken ct = default)
+        => SendVoidAsync(HttpMethod.Delete, $"api/lists/{listId}/watchers/{userId}", null, ct);
+
+    public async Task<List<UserSearchResult>> SearchListWatcherUsersAsync(string listId, string query, CancellationToken ct = default)
+    {
+        var json = await GetElementAsync($"api/lists/{listId}/watchers/users?q={Uri.EscapeDataString(query)}", ct);
+        return json.TryGetProperty("users", out var arr) && arr.ValueKind == JsonValueKind.Array
+            ? arr.Deserialize<List<UserSearchResult>>(JsonOptions) ?? new()
+            : new();
+    }
 }

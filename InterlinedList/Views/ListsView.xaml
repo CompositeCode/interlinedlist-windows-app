@@ -167,41 +167,104 @@
                               VerticalScrollBarVisibility="Auto"
                               HorizontalScrollBarVisibility="Disabled"
                               Padding="16,0,16,16">
-                    <ItemsControl ItemsSource="{Binding Lists}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate DataType="{x:Type models:ListSummary}">
-                                <Border Margin="0,0,0,8"
-                                        Background="{DynamicResource Surface2Brush}"
-                                        BorderBrush="{DynamicResource BorderBrush}"
-                                        BorderThickness="1"
-                                        CornerRadius="4"
-                                        Padding="10,8">
-                                    <StackPanel>
-                                        <TextBlock Text="{Binding Title}"
-                                                   FontSize="13" FontWeight="SemiBold"
-                                                   Foreground="{DynamicResource TextBrush}"
-                                                   TextWrapping="Wrap"/>
-                                        <TextBlock Text="{Binding Description}"
-                                                   FontSize="11"
-                                                   Foreground="{DynamicResource TextMutedBrush}"
-                                                   TextWrapping="Wrap"
-                                                   MaxHeight="34"
-                                                   Margin="0,2,0,6"/>
-                                        <StackPanel Orientation="Horizontal">
-                                            <Button Content="View"
-                                                    Command="{Binding DataContext.SelectListCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                    CommandParameter="{Binding}"
-                                                    Style="{StaticResource SmallBtnStyle}"/>
-                                            <Button Content="Delete"
-                                                    Command="{Binding DataContext.DeleteListCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                    CommandParameter="{Binding}"
-                                                    Style="{StaticResource SmallBtnStyle}"/>
+                    <StackPanel>
+                        <ItemsControl ItemsSource="{Binding Lists}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type models:ListSummary}">
+                                    <Border Margin="0,0,0,8"
+                                            Background="{DynamicResource Surface2Brush}"
+                                            BorderBrush="{DynamicResource BorderBrush}"
+                                            BorderThickness="1"
+                                            CornerRadius="4"
+                                            Padding="10,8">
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding Title}"
+                                                       FontSize="13" FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource TextBrush}"
+                                                       TextWrapping="Wrap"/>
+                                            <TextBlock Text="{Binding Description}"
+                                                       FontSize="11"
+                                                       Foreground="{DynamicResource TextMutedBrush}"
+                                                       TextWrapping="Wrap"
+                                                       MaxHeight="34"
+                                                       Margin="0,2,0,6"/>
+                                            <StackPanel Orientation="Horizontal">
+                                                <Button Content="View"
+                                                        Command="{Binding DataContext.SelectListCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                        CommandParameter="{Binding}"
+                                                        Style="{StaticResource SmallBtnStyle}"/>
+                                                <Button Content="Delete"
+                                                        Command="{Binding DataContext.DeleteListCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                        CommandParameter="{Binding}"
+                                                        Style="{StaticResource SmallBtnStyle}"/>
+                                            </StackPanel>
                                         </StackPanel>
-                                    </StackPanel>
-                                </Border>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <!-- Shared with me -->
+                        <StackPanel Margin="0,8,0,0">
+                            <StackPanel.Style>
+                                <Style TargetType="StackPanel">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding SharedWithMe.Count}" Value="0">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </StackPanel.Style>
+                            <TextBlock Text="Shared with me"
+                                       FontSize="13" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextBrush}"
+                                       Margin="0,4,0,8"/>
+                            <ItemsControl ItemsSource="{Binding SharedWithMe}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type models:WatchedList}">
+                                        <Button Command="{Binding DataContext.SelectSharedListCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                CommandParameter="{Binding}"
+                                                HorizontalContentAlignment="Stretch"
+                                                Cursor="Hand"
+                                                Margin="0,0,0,8">
+                                            <Button.Template>
+                                                <ControlTemplate TargetType="Button">
+                                                    <Border x:Name="Bg"
+                                                            Background="{DynamicResource Surface2Brush}"
+                                                            BorderBrush="{DynamicResource BorderBrush}"
+                                                            BorderThickness="1"
+                                                            CornerRadius="4"
+                                                            Padding="10,8">
+                                                        <ContentPresenter/>
+                                                    </Border>
+                                                    <ControlTemplate.Triggers>
+                                                        <Trigger Property="IsMouseOver" Value="True">
+                                                            <Setter TargetName="Bg" Property="Background" Value="{DynamicResource Surface3Brush}"/>
+                                                        </Trigger>
+                                                    </ControlTemplate.Triggers>
+                                                </ControlTemplate>
+                                            </Button.Template>
+                                            <StackPanel>
+                                                <TextBlock Text="{Binding Title}"
+                                                           FontSize="13" FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource TextBrush}"
+                                                           TextWrapping="Wrap"/>
+                                                <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                                                    <TextBlock Text="{Binding OwnerHandle}"
+                                                               FontSize="11"
+                                                               Foreground="{DynamicResource TextMutedBrush}"/>
+                                                    <TextBlock Text="{Binding RoleLabel, StringFormat=' · {0}'}"
+                                                               FontSize="11"
+                                                               Foreground="{DynamicResource TextMutedBrush}"/>
+                                                </StackPanel>
+                                            </StackPanel>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </StackPanel>
                 </ScrollViewer>
             </Grid>
         </Border>
@@ -220,13 +283,55 @@
                     BorderThickness="0,0,0,1"
                     Padding="20,12">
                 <Grid>
+                    <!-- Own-list title (hidden while viewing a shared list) -->
                     <TextBlock Text="{Binding SelectedList.Title}"
                                FontSize="17" FontWeight="SemiBold"
-                               Foreground="{DynamicResource TextBrush}"/>
+                               Foreground="{DynamicResource TextBrush}">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Visibility" Value="Visible"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsViewingShared}" Value="True">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+
+                    <!-- Shared-list read-only header -->
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center"
+                                Visibility="{Binding IsViewingShared, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock Text="{Binding SelectedSharedList.Title}"
+                                   FontSize="17" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextBrush}"/>
+                        <TextBlock Text="{Binding SelectedSharedList.OwnerHandle, StringFormat='shared by {0}'}"
+                                   FontSize="12"
+                                   Foreground="{DynamicResource TextMutedBrush}"
+                                   VerticalAlignment="Center"
+                                   Margin="10,3,0,0"/>
+                        <TextBlock Text="{Binding SelectedSharedList.RoleLabel, StringFormat=' · {0} · read-only'}"
+                                   FontSize="12"
+                                   Foreground="{DynamicResource TextMutedBrush}"
+                                   VerticalAlignment="Center"
+                                   Margin="0,3,0,0"/>
+                    </StackPanel>
+
                     <TextBlock Text="Select a list to view its rows."
                                FontSize="13"
-                               Foreground="{DynamicResource TextMutedBrush}"
-                               Visibility="{Binding SelectedList, Converter={StaticResource InverseNullToVisibility}}"/>
+                               Foreground="{DynamicResource TextMutedBrush}">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Visibility"
+                                        Value="{Binding SelectedList, Converter={StaticResource InverseNullToVisibility}}"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsViewingShared}" Value="True">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
                     <TextBlock Text="Loading…"
                                HorizontalAlignment="Right"
                                FontSize="12"
@@ -240,6 +345,234 @@
                           HorizontalScrollBarVisibility="Disabled"
                           Padding="20,12">
                 <StackPanel>
+                    <!-- Share links (own lists only) -->
+                    <Border Margin="0,0,0,12"
+                            Background="{DynamicResource Surface2Brush}"
+                            BorderBrush="{DynamicResource BorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="4"
+                            Padding="12,10">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Setter Property="Visibility"
+                                        Value="{Binding SelectedList, Converter={StaticResource InverseNullToVisibility}}"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsViewingShared}" Value="True">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                        <StackPanel>
+                            <DockPanel Margin="0,0,0,8">
+                                <Button DockPanel.Dock="Right"
+                                        Content="Create share link"
+                                        Command="{Binding CreateShareLinkCommand}"
+                                        Style="{StaticResource PrimaryBtnStyle}"/>
+                                <TextBlock Text="Public share links"
+                                           FontSize="13" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextBrush}"
+                                           VerticalAlignment="Center"/>
+                            </DockPanel>
+
+                            <TextBlock Text="No share links yet. Create one to share this list read-only."
+                                       FontSize="11"
+                                       Foreground="{DynamicResource TextMutedBrush}"
+                                       TextWrapping="Wrap">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding ShareLinks.Count}" Value="0">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+
+                            <ItemsControl ItemsSource="{Binding ShareLinks}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type models:ShareLink}">
+                                        <Border Margin="0,0,0,6"
+                                                Background="{DynamicResource Surface3Brush}"
+                                                BorderBrush="{DynamicResource BorderBrush}"
+                                                BorderThickness="1"
+                                                CornerRadius="3"
+                                                Padding="10,8">
+                                            <DockPanel>
+                                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal"
+                                                            VerticalAlignment="Top" Margin="8,0,0,0">
+                                                    <Button Content="Copy"
+                                                            Command="{Binding DataContext.CopyShareLinkCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                            CommandParameter="{Binding}"
+                                                            Style="{StaticResource RowActionBtnStyle}"/>
+                                                    <Button Content="Revoke"
+                                                            Command="{Binding DataContext.RevokeShareLinkCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                            CommandParameter="{Binding}"
+                                                            Style="{StaticResource RowActionBtnStyle}"/>
+                                                </StackPanel>
+                                                <StackPanel>
+                                                    <TextBox Text="{Binding Url, Mode=OneWay}"
+                                                             IsReadOnly="True"
+                                                             BorderThickness="0"
+                                                             Background="Transparent"
+                                                             Foreground="{DynamicResource TextMutedBrush}"
+                                                             FontSize="11"
+                                                             FontFamily="JetBrains Mono, Consolas"
+                                                             TextWrapping="Wrap"
+                                                             Padding="0"/>
+                                                    <TextBlock Text="{Binding RoleLabel}"
+                                                               FontSize="11"
+                                                               Foreground="{DynamicResource TextMutedBrush}"
+                                                               Margin="0,2,0,0"/>
+                                                </StackPanel>
+                                            </DockPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Watchers (own lists only) -->
+                    <Border Margin="0,0,0,12"
+                            Background="{DynamicResource Surface2Brush}"
+                            BorderBrush="{DynamicResource BorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="4"
+                            Padding="12,10">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Setter Property="Visibility"
+                                        Value="{Binding SelectedList, Converter={StaticResource InverseNullToVisibility}}"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsViewingShared}" Value="True">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                        <StackPanel>
+                            <TextBlock Text="Watchers"
+                                       FontSize="13" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextBrush}"
+                                       Margin="0,0,0,8"/>
+
+                            <!-- Invite by search -->
+                            <DockPanel Margin="0,0,0,8">
+                                <Button DockPanel.Dock="Right"
+                                        Content="Search"
+                                        Command="{Binding SearchWatcherUsersCommand}"
+                                        Style="{StaticResource PrimaryBtnStyle}"
+                                        Margin="8,0,0,0"/>
+                                <TextBox Text="{Binding WatcherSearchQuery, UpdateSourceTrigger=PropertyChanged}"
+                                         Style="{StaticResource FieldStyle}"
+                                         Margin="0"
+                                         VerticalContentAlignment="Center"/>
+                            </DockPanel>
+
+                            <!-- Search results -->
+                            <ItemsControl ItemsSource="{Binding WatcherSearchResults}"
+                                          Margin="0,0,0,4">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type models:UserSearchResult}">
+                                        <Border Margin="0,0,0,6"
+                                                Background="{DynamicResource Surface3Brush}"
+                                                BorderBrush="{DynamicResource BorderBrush}"
+                                                BorderThickness="1"
+                                                CornerRadius="3"
+                                                Padding="10,6">
+                                            <DockPanel>
+                                                <Button DockPanel.Dock="Right"
+                                                        Content="Add"
+                                                        Command="{Binding DataContext.AddWatcherCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                        CommandParameter="{Binding}"
+                                                        Style="{StaticResource RowActionBtnStyle}"
+                                                        VerticalAlignment="Center"/>
+                                                <StackPanel Orientation="Horizontal">
+                                                    <Border Width="24" Height="24"
+                                                            CornerRadius="12"
+                                                            Background="{DynamicResource Surface2Brush}"
+                                                            Margin="0,0,8,0"
+                                                            VerticalAlignment="Center"/>
+                                                    <StackPanel VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding DisplayName}"
+                                                                   FontSize="12" FontWeight="SemiBold"
+                                                                   Foreground="{DynamicResource TextBrush}"/>
+                                                        <TextBlock Text="{Binding Username, StringFormat='@{0}'}"
+                                                                   FontSize="11"
+                                                                   Foreground="{DynamicResource TextMutedBrush}"/>
+                                                    </StackPanel>
+                                                </StackPanel>
+                                            </DockPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <!-- Current watchers -->
+                            <TextBlock Text="No watchers yet. Search above to invite someone."
+                                       FontSize="11"
+                                       Foreground="{DynamicResource TextMutedBrush}"
+                                       TextWrapping="Wrap"
+                                       Margin="0,4,0,0">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Watchers.Count}" Value="0">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+
+                            <ItemsControl ItemsSource="{Binding Watchers}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type models:Collaborator}">
+                                        <Border Margin="0,0,0,6"
+                                                Background="{DynamicResource Surface3Brush}"
+                                                BorderBrush="{DynamicResource BorderBrush}"
+                                                BorderThickness="1"
+                                                CornerRadius="3"
+                                                Padding="10,6">
+                                            <DockPanel>
+                                                <Button DockPanel.Dock="Right"
+                                                        Content="Remove"
+                                                        Command="{Binding DataContext.RemoveWatcherCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                        CommandParameter="{Binding}"
+                                                        Style="{StaticResource RowActionBtnStyle}"
+                                                        VerticalAlignment="Center"/>
+                                                <StackPanel Orientation="Horizontal">
+                                                    <Border Width="24" Height="24"
+                                                            CornerRadius="12"
+                                                            Background="{DynamicResource Surface2Brush}"
+                                                            Margin="0,0,8,0"
+                                                            VerticalAlignment="Center"/>
+                                                    <StackPanel VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding DisplayNameOrUsername}"
+                                                                   FontSize="12" FontWeight="SemiBold"
+                                                                   Foreground="{DynamicResource TextBrush}"/>
+                                                        <StackPanel Orientation="Horizontal">
+                                                            <TextBlock Text="{Binding Handle}"
+                                                                       FontSize="11"
+                                                                       Foreground="{DynamicResource TextMutedBrush}"/>
+                                                            <TextBlock Text="{Binding RoleLabel, StringFormat=' · {0}'}"
+                                                                       FontSize="11"
+                                                                       Foreground="{DynamicResource TextMutedBrush}"/>
+                                                        </StackPanel>
+                                                    </StackPanel>
+                                                </StackPanel>
+                                            </DockPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Border>
+
                     <ItemsControl ItemsSource="{Binding Rows}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate DataType="{x:Type models:ListDataRow}">
@@ -252,6 +585,16 @@
                                     <DockPanel>
                                         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal"
                                                     VerticalAlignment="Top" Margin="8,0,0,0">
+                                            <StackPanel.Style>
+                                                <Style TargetType="StackPanel">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding DataContext.IsViewingShared, RelativeSource={RelativeSource AncestorType=UserControl}}" Value="True">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </StackPanel.Style>
                                             <Button Content="Edit"
                                                     Command="{Binding DataContext.StartEditRowCommand,
                                                               RelativeSource={RelativeSource AncestorType=ItemsControl}}"
@@ -304,6 +647,16 @@
                     BorderBrush="{DynamicResource BorderBrush}"
                     BorderThickness="0,1,0,0"
                     Padding="20,12">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="Visibility" Value="Visible"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsViewingShared}" Value="True">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
                 <StackPanel>
                     <TextBlock Text="Paste a JSON object, e.g. {&quot;name&quot;: &quot;Widget&quot;, &quot;price&quot;: 9.99}"
                                FontSize="11"
