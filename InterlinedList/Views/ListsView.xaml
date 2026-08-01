@@ -345,6 +345,96 @@
                           HorizontalScrollBarVisibility="Disabled"
                           Padding="20,12">
                 <StackPanel>
+                    <!-- Share links (own lists only) -->
+                    <Border Margin="0,0,0,12"
+                            Background="{DynamicResource Surface2Brush}"
+                            BorderBrush="{DynamicResource BorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="4"
+                            Padding="12,10">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Setter Property="Visibility"
+                                        Value="{Binding SelectedList, Converter={StaticResource InverseNullToVisibility}}"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsViewingShared}" Value="True">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                        <StackPanel>
+                            <DockPanel Margin="0,0,0,8">
+                                <Button DockPanel.Dock="Right"
+                                        Content="Create share link"
+                                        Command="{Binding CreateShareLinkCommand}"
+                                        Style="{StaticResource PrimaryBtnStyle}"/>
+                                <TextBlock Text="Public share links"
+                                           FontSize="13" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextBrush}"
+                                           VerticalAlignment="Center"/>
+                            </DockPanel>
+
+                            <TextBlock Text="No share links yet. Create one to share this list read-only."
+                                       FontSize="11"
+                                       Foreground="{DynamicResource TextMutedBrush}"
+                                       TextWrapping="Wrap">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding ShareLinks.Count}" Value="0">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+
+                            <ItemsControl ItemsSource="{Binding ShareLinks}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type models:ShareLink}">
+                                        <Border Margin="0,0,0,6"
+                                                Background="{DynamicResource Surface3Brush}"
+                                                BorderBrush="{DynamicResource BorderBrush}"
+                                                BorderThickness="1"
+                                                CornerRadius="3"
+                                                Padding="10,8">
+                                            <DockPanel>
+                                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal"
+                                                            VerticalAlignment="Top" Margin="8,0,0,0">
+                                                    <Button Content="Copy"
+                                                            Command="{Binding DataContext.CopyShareLinkCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                            CommandParameter="{Binding}"
+                                                            Style="{StaticResource RowActionBtnStyle}"/>
+                                                    <Button Content="Revoke"
+                                                            Command="{Binding DataContext.RevokeShareLinkCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                            CommandParameter="{Binding}"
+                                                            Style="{StaticResource RowActionBtnStyle}"/>
+                                                </StackPanel>
+                                                <StackPanel>
+                                                    <TextBox Text="{Binding Url, Mode=OneWay}"
+                                                             IsReadOnly="True"
+                                                             BorderThickness="0"
+                                                             Background="Transparent"
+                                                             Foreground="{DynamicResource TextMutedBrush}"
+                                                             FontSize="11"
+                                                             FontFamily="JetBrains Mono, Consolas"
+                                                             TextWrapping="Wrap"
+                                                             Padding="0"/>
+                                                    <TextBlock Text="{Binding RoleLabel}"
+                                                               FontSize="11"
+                                                               Foreground="{DynamicResource TextMutedBrush}"
+                                                               Margin="0,2,0,0"/>
+                                                </StackPanel>
+                                            </DockPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Border>
+
                     <ItemsControl ItemsSource="{Binding Rows}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate DataType="{x:Type models:ListDataRow}">

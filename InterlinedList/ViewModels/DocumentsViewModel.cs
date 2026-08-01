@@ -14,6 +14,9 @@ public partial class DocumentsViewModel : ObservableObject
     public ObservableCollection<DocumentFolder> Folders { get; } = new();
     public ObservableCollection<DocumentTemplate> Templates { get; } = new();
 
+    // Public share links for the currently-open document (empty when none open).
+    public ObservableCollection<ShareLink> ShareLinks { get; } = new();
+
     [ObservableProperty]
     private bool isLoading;
 
@@ -112,11 +115,79 @@ public partial class DocumentsViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void SelectDocument(DocumentSummary doc)
+    private async Task SelectDocumentAsync(DocumentSummary doc)
     {
         SelectedDocument = doc;
         EditTitle = doc.Title;
         EditContent = doc.Content;
+        await ReloadShareLinksAsync(doc.Id);
+    }
+
+    // Refresh ShareLinks from the server for the given document (read-after-write).
+    private async Task ReloadShareLinksAsync(string documentId)
+    {
+        try
+        {
+            var links = await _session.Api.GetDocumentShareLinksAsync(documentId);
+            ShareLinks.Clear();
+            foreach (var link in links)
+                ShareLinks.Add(link);
+        }
+        catch (InterlinedApiException ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+    }
+
+    private bool CanShareSelectedDocument() => SelectedDocument is not null;
+
+    [RelayCommand(CanExecute = nameof(CanShareSelectedDocument))]
+    private async Task CreateShareLinkAsync()
+    {
+        if (SelectedDocument is not { } doc) return;
+
+        try
+        {
+            await _session.Api.CreateDocumentShareLinkAsync(doc.Id);
+            ErrorMessage = null;
+            await ReloadShareLinksAsync(doc.Id);
+        }
+        catch (InterlinedApiException ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+    }
+
+    [RelayCommand]
+    private async Task RevokeShareLinkAsync(ShareLink link)
+    {
+        if (SelectedDocument is not { } doc) return;
+
+        try
+        {
+            await _session.Api.DeleteDocumentShareLinkAsync(doc.Id, link.Token);
+            ErrorMessage = null;
+            await ReloadShareLinksAsync(doc.Id);
+        }
+        catch (InterlinedApiException ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+    }
+
+    [RelayCommand]
+    private void CopyShareLink(ShareLink link)
+    {
+        if (string.IsNullOrEmpty(link.Url)) return;
+
+        try
+        {
+            System.Windows.Clipboard.SetText(link.Url);
+        }
+        catch (InterlinedApiException ex)
+        {
+            ErrorMessage = ex.Message;
+        }
     }
 
     private bool CanSaveDocument() => SelectedDocument is not null;
@@ -149,6 +220,7 @@ public partial class DocumentsViewModel : ObservableObject
                 SelectedDocument = null;
                 EditTitle = "";
                 EditContent = "";
+                ShareLinks.Clear();
             }
             ErrorMessage = null;
             await LoadAsync();
@@ -291,7 +363,11 @@ public partial class DocumentsViewModel : ObservableObject
 
     partial void OnNewDocTitleChanged(string value) => CreateDocumentCommand.NotifyCanExecuteChanged();
 
-    partial void OnSelectedDocumentChanged(DocumentSummary? value) => SaveDocumentCommand.NotifyCanExecuteChanged();
+    partial void OnSelectedDocumentChanged(DocumentSummary? value)
+    {
+        SaveDocumentCommand.NotifyCanExecuteChanged();
+        CreateShareLinkCommand.NotifyCanExecuteChanged();
+    }
 
     partial void OnNewFolderNameChanged(string value) => CreateFolderCommand.NotifyCanExecuteChanged();
 

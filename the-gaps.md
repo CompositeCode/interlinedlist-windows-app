@@ -141,6 +141,27 @@ register/forgot-password, account-deletion UI, DM inbox-folder view.
 
 ---
 
+## Progress — Session 5 (2026-08-01) — sharing + auth self-service
+
+Live-verified share-link shape (POST → `{token,url,role,expiresAt}`, GET →
+`{shareLinks:[…]}`, DELETE by token; created+deleted a real test link). App
+builds clean in Debug + Release.
+
+**Shipped this session:**
+- ✅ **Public share links** for **Lists** and **Documents** — create / list /
+  revoke / copy-URL, gated to items you own.
+- ✅ **Auth self-service** — **Register** (email/username/password/display name)
+  and **Forgot password** in the login window (mode toggle + reset request).
+- Services: `RegisterAsync`, `ForgotPasswordAsync`, list + document share-link
+  create/list/delete, `ShareLink` model.
+
+**Remaining post-v1:** watcher/collaborator *member* management (undocumented
+request bodies + empty data — needs a second account), Materialize, GitHub
+(needs GitHub linked), billing handoff, account-deletion UI, DM inbox-folder,
+mutual-follows display, per-list schema/columns.
+
+---
+
 ## 1. Parity snapshot by domain
 
 | Domain (product's name) | Web/API has | App has today | Status |

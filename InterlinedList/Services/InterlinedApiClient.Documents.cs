@@ -93,4 +93,21 @@ public sealed partial class InterlinedApiClient
     public Task CreateDocumentInFolderAsync(string folderId, string title, string content, CancellationToken ct = default)
         => SendVoidAsync(HttpMethod.Post, $"api/documents/folders/{folderId}/documents",
             new { title, content, isPublic = false }, ct);
+
+    // ── Share links (create a public read link for a document) ──────────────────
+    // Same shape as list share-links (verified live 2026-08-01).
+
+    public async Task<List<ShareLink>> GetDocumentShareLinksAsync(string documentId, CancellationToken ct = default)
+    {
+        var json = await GetElementAsync($"api/documents/{documentId}/share-links", ct);
+        return json.TryGetProperty("shareLinks", out var arr) && arr.ValueKind == JsonValueKind.Array
+            ? arr.Deserialize<List<ShareLink>>(JsonOptions) ?? new()
+            : new();
+    }
+
+    public Task<ShareLink> CreateDocumentShareLinkAsync(string documentId, CancellationToken ct = default)
+        => SendJsonAsync<ShareLink>(HttpMethod.Post, $"api/documents/{documentId}/share-links", new { }, ct);
+
+    public Task DeleteDocumentShareLinkAsync(string documentId, string token, CancellationToken ct = default)
+        => SendVoidAsync(HttpMethod.Delete, $"api/documents/{documentId}/share-links/{token}", null, ct);
 }

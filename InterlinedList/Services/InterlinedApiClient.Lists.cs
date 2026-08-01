@@ -83,4 +83,22 @@ public sealed partial class InterlinedApiClient
             ? arr.Deserialize<List<WatchedList>>(JsonOptions) ?? new()
             : new();
     }
+
+    // ── Share links (create a public read link for a list) ──────────────────────
+    // Shape verified live 2026-08-01: GET → { shareLinks }, POST → the new link,
+    // DELETE …/{token} revokes it.
+
+    public async Task<List<ShareLink>> GetListShareLinksAsync(string listId, CancellationToken ct = default)
+    {
+        var json = await GetElementAsync($"api/lists/{listId}/share-links", ct);
+        return json.TryGetProperty("shareLinks", out var arr) && arr.ValueKind == JsonValueKind.Array
+            ? arr.Deserialize<List<ShareLink>>(JsonOptions) ?? new()
+            : new();
+    }
+
+    public Task<ShareLink> CreateListShareLinkAsync(string listId, CancellationToken ct = default)
+        => SendJsonAsync<ShareLink>(HttpMethod.Post, $"api/lists/{listId}/share-links", new { }, ct);
+
+    public Task DeleteListShareLinkAsync(string listId, string token, CancellationToken ct = default)
+        => SendVoidAsync(HttpMethod.Delete, $"api/lists/{listId}/share-links/{token}", null, ct);
 }

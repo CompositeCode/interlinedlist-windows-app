@@ -16,6 +16,7 @@ public partial class ListsViewModel : ObservableObject
     public ObservableCollection<ListSummary> Lists { get; } = new();
     public ObservableCollection<ListDataRow> Rows { get; } = new();
     public ObservableCollection<WatchedList> SharedWithMe { get; } = new();
+    public ObservableCollection<ShareLink> ShareLinks { get; } = new();
 
     [ObservableProperty]
     private bool isLoading;
@@ -116,6 +117,7 @@ public partial class ListsViewModel : ObservableObject
             {
                 SelectedList = null;
                 Rows.Clear();
+                ShareLinks.Clear();
             }
             await LoadListsAsync();
         }
@@ -151,6 +153,7 @@ public partial class ListsViewModel : ObservableObject
         SelectedSharedList = null;
         SelectedList = list;
         await LoadRowsAsync(list.Id);
+        await LoadShareLinksAsync(list.Id);
     }
 
     [RelayCommand]
@@ -161,7 +164,63 @@ public partial class ListsViewModel : ObservableObject
         SelectedSharedList = watched;
         EditingRow = null;
         EditRowJson = "";
+        ShareLinks.Clear();
         await LoadRowsAsync(watched.Id);
+    }
+
+    private async Task LoadShareLinksAsync(string listId)
+    {
+        try
+        {
+            var links = await _session.Api.GetListShareLinksAsync(listId);
+
+            ShareLinks.Clear();
+            foreach (var link in links)
+                ShareLinks.Add(link);
+        }
+        catch (InterlinedApiException ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+    }
+
+    private bool CanManageShareLinks() => SelectedList is not null && !IsViewingShared;
+
+    [RelayCommand(CanExecute = nameof(CanManageShareLinks))]
+    private async Task CreateShareLinkAsync()
+    {
+        if (SelectedList is not { } list) return;
+        try
+        {
+            await _session.Api.CreateListShareLinkAsync(list.Id);
+            await LoadShareLinksAsync(list.Id);
+        }
+        catch (InterlinedApiException ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+    }
+
+    [RelayCommand]
+    private async Task RevokeShareLinkAsync(ShareLink link)
+    {
+        if (SelectedList is not { } list) return;
+        try
+        {
+            await _session.Api.DeleteListShareLinkAsync(list.Id, link.Token);
+            await LoadShareLinksAsync(list.Id);
+        }
+        catch (InterlinedApiException ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+    }
+
+    [RelayCommand]
+    private void CopyShareLink(ShareLink link)
+    {
+        if (string.IsNullOrEmpty(link.Url)) return;
+        System.Windows.Clipboard.SetText(link.Url);
     }
 
     private async Task LoadRowsAsync(string listId)
@@ -282,7 +341,13 @@ public partial class ListsViewModel : ObservableObject
 
     partial void OnNewListTitleChanged(string value) => CreateListCommand.NotifyCanExecuteChanged();
 
-    partial void OnSelectedListChanged(ListSummary? value) => AddRowCommand.NotifyCanExecuteChanged();
+    partial void OnSelectedListChanged(ListSummary? value)
+    {
+        AddRowCommand.NotifyCanExecuteChanged();
+        CreateShareLinkCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnIsViewingSharedChanged(bool value) => CreateShareLinkCommand.NotifyCanExecuteChanged();
 
     partial void OnNewRowJsonChanged(string value) => AddRowCommand.NotifyCanExecuteChanged();
 }
