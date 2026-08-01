@@ -70,4 +70,17 @@ public sealed partial class InterlinedApiClient
 
     public Task DeleteListRowAsync(string listId, string rowId, CancellationToken ct = default)
         => SendVoidAsync(HttpMethod.Delete, $"api/lists/{listId}/data/{rowId}", null, ct);
+
+    /// <summary>
+    /// Lists owned by others that have been shared with the current user
+    /// (GET /api/lists/watching → { lists, pagination }). Their rows are readable
+    /// via <see cref="GetListDataAsync"/> (access is granted server-side).
+    /// </summary>
+    public async Task<List<WatchedList>> GetWatchingListsAsync(CancellationToken ct = default)
+    {
+        var json = await GetElementAsync("api/lists/watching", ct);
+        return json.TryGetProperty("lists", out var arr) && arr.ValueKind == JsonValueKind.Array
+            ? arr.Deserialize<List<WatchedList>>(JsonOptions) ?? new()
+            : new();
+    }
 }

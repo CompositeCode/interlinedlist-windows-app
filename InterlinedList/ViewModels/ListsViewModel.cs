@@ -15,6 +15,7 @@ public partial class ListsViewModel : ObservableObject
 
     public ObservableCollection<ListSummary> Lists { get; } = new();
     public ObservableCollection<ListDataRow> Rows { get; } = new();
+    public ObservableCollection<WatchedList> SharedWithMe { get; } = new();
 
     [ObservableProperty]
     private bool isLoading;
@@ -30,6 +31,12 @@ public partial class ListsViewModel : ObservableObject
 
     [ObservableProperty]
     private ListSummary? selectedList;
+
+    [ObservableProperty]
+    private bool isViewingShared;
+
+    [ObservableProperty]
+    private WatchedList? selectedSharedList;
 
     [ObservableProperty]
     private bool isLoadingRows;
@@ -119,18 +126,50 @@ public partial class ListsViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private async Task SelectListAsync(ListSummary list)
+    private async Task LoadSharedAsync()
     {
-        SelectedList = list;
-        await LoadRowsAsync(list);
+        try
+        {
+            var shared = await _session.Api.GetWatchingListsAsync();
+
+            SharedWithMe.Clear();
+            foreach (var list in shared)
+                SharedWithMe.Add(list);
+
+            ErrorMessage = null;
+        }
+        catch (InterlinedApiException ex)
+        {
+            ErrorMessage = ex.Message;
+        }
     }
 
-    private async Task LoadRowsAsync(ListSummary list)
+    [RelayCommand]
+    private async Task SelectListAsync(ListSummary list)
+    {
+        IsViewingShared = false;
+        SelectedSharedList = null;
+        SelectedList = list;
+        await LoadRowsAsync(list.Id);
+    }
+
+    [RelayCommand]
+    private async Task SelectSharedListAsync(WatchedList watched)
+    {
+        IsViewingShared = true;
+        SelectedList = null;
+        SelectedSharedList = watched;
+        EditingRow = null;
+        EditRowJson = "";
+        await LoadRowsAsync(watched.Id);
+    }
+
+    private async Task LoadRowsAsync(string listId)
     {
         IsLoadingRows = true;
         try
         {
-            var page = await _session.Api.GetListDataAsync(list.Id, limit: PageSize, offset: 0);
+            var page = await _session.Api.GetListDataAsync(listId, limit: PageSize, offset: 0);
 
             Rows.Clear();
             foreach (var row in page.Rows)
@@ -172,7 +211,7 @@ public partial class ListsViewModel : ObservableObject
             await _session.Api.AddListRowAsync(list.Id, parsed);
             NewRowJson = "";
             RowErrorMessage = null;
-            await LoadRowsAsync(list);
+            await LoadRowsAsync(list.Id);
         }
         catch (InterlinedApiException ex)
         {
@@ -218,7 +257,7 @@ public partial class ListsViewModel : ObservableObject
             EditingRow = null;
             EditRowJson = "";
             RowErrorMessage = null;
-            await LoadRowsAsync(list);
+            await LoadRowsAsync(list.Id);
         }
         catch (InterlinedApiException ex)
         {
@@ -233,7 +272,7 @@ public partial class ListsViewModel : ObservableObject
         try
         {
             await _session.Api.DeleteListRowAsync(list.Id, row.Id);
-            await LoadRowsAsync(list);
+            await LoadRowsAsync(list.Id);
         }
         catch (InterlinedApiException ex)
         {

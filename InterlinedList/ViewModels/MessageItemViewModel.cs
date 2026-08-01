@@ -32,6 +32,9 @@ public partial class MessageItemViewModel : ObservableObject
     public IReadOnlyList<string> ImageUrls { get; }
     public bool HasImages => ImageUrls.Count > 0;
 
+    public IReadOnlyList<string> VideoUrls { get; }
+    public bool HasVideos => VideoUrls.Count > 0;
+
     public ObservableCollection<MessageItemViewModel> Replies { get; } = new();
 
     [ObservableProperty]
@@ -82,6 +85,7 @@ public partial class MessageItemViewModel : ObservableObject
         AvatarUrl = message.User?.Avatar;
         IsMine = message.UserId == currentUserId;
         ImageUrls = message.ImageUrls ?? new List<string>();
+        VideoUrls = message.VideoUrls ?? new List<string>();
 
         digCount = message.DigCount;
         dugByMe = message.DugByMe;
@@ -254,6 +258,13 @@ public partial class MessageItemViewModel : ObservableObject
     {
         if (!string.IsNullOrEmpty(AuthorUsername))
             Navigator.OpenProfile(AuthorUsername);
+    }
+
+    [RelayCommand]
+    private void OpenVideo(string url)
+    {
+        if (!string.IsNullOrEmpty(url))
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = url, UseShellExecute = true });
     }
 
     partial void OnEditTextChanged(string value) => SaveEditCommand.NotifyCanExecuteChanged();

@@ -41,6 +41,33 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <!-- Subtle card action (Delete / Restore / Add image) — matches FeedView -->
+        <Style x:Key="CardActionBtnStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="6,2"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bg"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="3"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource Surface3Brush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </UserControl.Resources>
 
     <Grid>
@@ -236,6 +263,18 @@
                                                            Foreground="{DynamicResource TextBodyBrush}"
                                                            TextWrapping="Wrap"
                                                            LineHeight="20"/>
+                                                <!-- Attached images -->
+                                                <ItemsControl ItemsSource="{Binding ImageUrls}" Margin="0,6,0,0"
+                                                              Visibility="{Binding HasImages, Converter={StaticResource BoolToVisibility}}">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <Border Margin="0,0,0,6" CornerRadius="4"
+                                                                    ClipToBounds="True" HorizontalAlignment="Left">
+                                                                <Image Source="{Binding}" Stretch="Uniform" MaxHeight="240"/>
+                                                            </Border>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
                                                 <TextBlock Text="{Binding TimeFormatted}"
                                                            FontFamily="JetBrains Mono, Consolas"
                                                            FontSize="10"
@@ -261,21 +300,69 @@
                                                         <DataTrigger Binding="{Binding IsMine}" Value="True">
                                                             <Setter Property="Visibility" Value="Visible"/>
                                                         </DataTrigger>
+                                                        <!-- Dim once soft-deleted (trashed) -->
+                                                        <DataTrigger Binding="{Binding IsTrashed}" Value="True">
+                                                            <Setter Property="Opacity" Value="0.5"/>
+                                                        </DataTrigger>
                                                     </Style.Triggers>
                                                 </Style>
                                             </Border.Style>
                                             <StackPanel>
+                                                <TextBlock Text="Deleted"
+                                                           FontSize="10" FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource TextMutedBrush}"
+                                                           Margin="0,0,0,4"
+                                                           HorizontalAlignment="Right"
+                                                           Visibility="{Binding IsTrashed, Converter={StaticResource BoolToVisibility}}"/>
                                                 <TextBlock Text="{Binding Body}"
                                                            FontSize="13"
                                                            Foreground="{DynamicResource TextBodyBrush}"
                                                            TextWrapping="Wrap"
                                                            LineHeight="20"/>
-                                                <TextBlock Text="{Binding TimeFormatted}"
-                                                           FontFamily="JetBrains Mono, Consolas"
-                                                           FontSize="10"
-                                                           Foreground="{DynamicResource TextMutedBrush}"
-                                                           Margin="0,4,0,0"
-                                                           HorizontalAlignment="Right"/>
+                                                <!-- Attached images -->
+                                                <ItemsControl ItemsSource="{Binding ImageUrls}" Margin="0,6,0,0"
+                                                              Visibility="{Binding HasImages, Converter={StaticResource BoolToVisibility}}">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <Border Margin="0,0,0,6" CornerRadius="4"
+                                                                    ClipToBounds="True" HorizontalAlignment="Right">
+                                                                <Image Source="{Binding}" Stretch="Uniform" MaxHeight="240"/>
+                                                            </Border>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                                <DockPanel Margin="0,4,0,0" LastChildFill="False">
+                                                    <TextBlock DockPanel.Dock="Left"
+                                                               Text="{Binding TimeFormatted}"
+                                                               FontFamily="JetBrains Mono, Consolas"
+                                                               FontSize="10"
+                                                               Foreground="{DynamicResource TextMutedBrush}"
+                                                               VerticalAlignment="Center"/>
+                                                    <!-- Delete (when not trashed) -->
+                                                    <Button DockPanel.Dock="Right"
+                                                            Content="Delete"
+                                                            Command="{Binding DataContext.TrashMessageCommand,
+                                                                      RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                            CommandParameter="{Binding}">
+                                                        <Button.Style>
+                                                            <Style TargetType="Button" BasedOn="{StaticResource CardActionBtnStyle}">
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding IsTrashed}" Value="True">
+                                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Button.Style>
+                                                    </Button>
+                                                    <!-- Restore (when trashed) -->
+                                                    <Button DockPanel.Dock="Right"
+                                                            Content="Restore"
+                                                            Command="{Binding DataContext.RestoreMessageCommand,
+                                                                      RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                            CommandParameter="{Binding}"
+                                                            Style="{StaticResource CardActionBtnStyle}"
+                                                            Visibility="{Binding IsTrashed, Converter={StaticResource BoolToVisibility}}"/>
+                                                </DockPanel>
                                             </StackPanel>
                                         </Border>
                                     </Grid>
@@ -290,31 +377,72 @@
                             BorderBrush="{DynamicResource BorderBrush}"
                             BorderThickness="0,1,0,0"
                             Padding="16,12">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBox Grid.Column="0"
-                                     Text="{Binding ComposeText, UpdateSourceTrigger=PropertyChanged}"
-                                     AcceptsReturn="True"
-                                     TextWrapping="Wrap"
-                                     MinHeight="40"
-                                     MaxHeight="120"
-                                     Padding="10,8"
-                                     FontSize="13"
-                                     VerticalContentAlignment="Center"
-                                     Background="{DynamicResource SurfaceBrush}"
-                                     Foreground="{DynamicResource TextBodyBrush}"
-                                     BorderBrush="{DynamicResource BorderBrush}"
-                                     BorderThickness="1"/>
-                            <Button Grid.Column="1"
-                                    Content="Send"
-                                    Command="{Binding SendCommand}"
-                                    Margin="8,0,0,0"
-                                    VerticalAlignment="Bottom"
-                                    Style="{StaticResource PrimaryBtnStyle}"/>
-                        </Grid>
+                        <StackPanel>
+                            <!-- Attached images (uploaded, pending send) -->
+                            <ItemsControl ItemsSource="{Binding AttachedImageUrls}" Margin="0,0,0,8">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Margin="0,0,6,6" Width="52" Height="52" CornerRadius="4"
+                                                ClipToBounds="True" Background="{DynamicResource Surface3Brush}">
+                                            <Grid>
+                                                <Image Source="{Binding}" Stretch="UniformToFill"/>
+                                                <Button Content="✕"
+                                                        Command="{Binding DataContext.RemoveAttachmentCommand,
+                                                                  RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                        CommandParameter="{Binding}"
+                                                        HorizontalAlignment="Right" VerticalAlignment="Top"
+                                                        Width="16" Height="16" Padding="0" FontSize="9"
+                                                        Background="#99000000" Foreground="White"
+                                                        BorderThickness="0" Cursor="Hand"/>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBox Grid.Column="0"
+                                         Text="{Binding ComposeText, UpdateSourceTrigger=PropertyChanged}"
+                                         AcceptsReturn="True"
+                                         TextWrapping="Wrap"
+                                         MinHeight="40"
+                                         MaxHeight="120"
+                                         Padding="10,8"
+                                         FontSize="13"
+                                         VerticalContentAlignment="Center"
+                                         Background="{DynamicResource SurfaceBrush}"
+                                         Foreground="{DynamicResource TextBodyBrush}"
+                                         BorderBrush="{DynamicResource BorderBrush}"
+                                         BorderThickness="1"/>
+                                <Button Grid.Column="1"
+                                        Content="Send"
+                                        Command="{Binding SendCommand}"
+                                        Margin="8,0,0,0"
+                                        VerticalAlignment="Bottom"
+                                        Style="{StaticResource PrimaryBtnStyle}"/>
+                            </Grid>
+
+                            <DockPanel Margin="0,8,0,0" LastChildFill="False">
+                                <Button DockPanel.Dock="Left"
+                                        Content="Add image"
+                                        Command="{Binding AttachImageCommand}"
+                                        Style="{StaticResource CardActionBtnStyle}"/>
+                                <TextBlock DockPanel.Dock="Left"
+                                           Text="Uploading…"
+                                           FontSize="11"
+                                           Foreground="{DynamicResource TextMutedBrush}"
+                                           VerticalAlignment="Center"
+                                           Margin="8,0,0,0"
+                                           Visibility="{Binding IsUploadingImage, Converter={StaticResource BoolToVisibility}}"/>
+                            </DockPanel>
+                        </StackPanel>
                     </Border>
                 </Grid>
             </Grid>

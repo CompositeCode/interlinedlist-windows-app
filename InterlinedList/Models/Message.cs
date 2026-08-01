@@ -14,6 +14,7 @@ public sealed class Message
     public bool DugByMe { get; init; }
     public ApiUser? User { get; init; }
     public List<string>? ImageUrls { get; init; }
+    public List<string>? VideoUrls { get; init; }
     public List<string>? Tags { get; init; }
 
     public string TimeFormatted => CreatedAt.ToUniversalTime().ToString("HH:mm:ss'Z'");

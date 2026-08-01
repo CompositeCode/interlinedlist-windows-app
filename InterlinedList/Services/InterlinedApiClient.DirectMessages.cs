@@ -1,3 +1,4 @@
+using System.IO;
 using System.Net.Http;
 using System.Text.Json;
 using InterlinedList.Models;
@@ -31,12 +32,33 @@ public sealed partial class InterlinedApiClient
         return json.TryGetProperty("count", out var c) && c.TryGetInt32(out var n) ? n : 0;
     }
 
-    public Task SendDmAsync(string recipientId, string body, CancellationToken ct = default)
-        => SendVoidAsync(HttpMethod.Post, "api/dm", new { recipientId, body }, ct);
+    public Task SendDmAsync(string recipientId, string body, IReadOnlyList<string>? imageUrls = null, CancellationToken ct = default)
+        => SendVoidAsync(HttpMethod.Post, "api/dm", new { recipientId, body, imageUrls }, ct);
 
     public Task MarkDmReadAsync(string id, CancellationToken ct = default)
         => SendVoidAsync(HttpMethod.Post, $"api/dm/{id}/read", new { }, ct);
 
     public Task TrashDmAsync(string id, CancellationToken ct = default)
         => SendVoidAsync(HttpMethod.Post, $"api/dm/{id}/trash", new { }, ct);
+
+    public Task RestoreDmAsync(string id, CancellationToken ct = default)
+        => SendVoidAsync(HttpMethod.Post, $"api/dm/{id}/restore", new { }, ct);
+
+    /// <summary>Upload an image attachment for a DM (multipart field "file" → { url }, verified live).</summary>
+    public async Task<string> UploadDmImageAsync(Stream content, string fileName, string contentType, CancellationToken ct = default)
+    {
+        var json = await SendMultipartAsync("api/dm/images/upload", content, fileName, contentType, ct: ct);
+        return json.TryGetProperty("url", out var url) && url.GetString() is { Length: > 0 } u
+            ? u
+            : throw new InterlinedApiException(200, "DM image upload returned no url.");
+    }
+
+    /// <summary>Lightweight incremental fetch for polling an open thread ({ items }).</summary>
+    public async Task<List<DirectMessage>> GetDmThreadUpdatesAsync(string username, CancellationToken ct = default)
+    {
+        var json = await GetElementAsync($"api/dm/thread/{Uri.EscapeDataString(username)}/updates", ct);
+        return json.TryGetProperty("items", out var arr) && arr.ValueKind == JsonValueKind.Array
+            ? arr.Deserialize<List<DirectMessage>>(JsonOptions) ?? new()
+            : new();
+    }
 }

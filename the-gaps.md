@@ -115,6 +115,32 @@ billing, register/forgot-password) are tracked below as post-v1.
 
 ---
 
+## Progress — Session 4 (2026-08-01) — media, scheduling, DM depth, sharing
+
+Verified last shapes live (video upload multipart field **`file`** → `{url}`;
+DM image upload same; I **can read a shared list's rows** with the bearer token).
+App builds clean in Debug + Release.
+
+**Shipped this session:**
+- ✅ **Scheduled posts** — compose date/time picker + a header toggle showing
+  your scheduled posts (`GET /api/messages/scheduled`, post with `scheduledAt`).
+- ✅ **Video upload** on posts — attach from disk, chips in compose, "🎬 Play
+  video" link in cards (opens in browser).
+- ✅ **Direct Messages depth** *(sub-agent)* — image attachments (upload +
+  display), trash/restore own messages, and **5-second live polling** of the
+  open thread (`.../updates`, deduped by id).
+- ✅ **Lists "Shared with me"** *(sub-agent)* — lists others shared with you
+  (`GET /api/lists/watching`), read-only row viewing.
+- Services: video upload, scheduled fetch, DM image/restore/updates, `videoUrls`
+  on compose, `GetWatchingListsAsync`.
+
+**Remaining post-v1:** list watcher *management* + share-link creation (empty
+data on the test account — needs a second account to verify), document sharing/
+collaborators, Materialize, GitHub (needs GitHub linked), billing handoff,
+register/forgot-password, account-deletion UI, DM inbox-folder view.
+
+---
+
 ## 1. Parity snapshot by domain
 
 | Domain (product's name) | Web/API has | App has today | Status |

@@ -17,7 +17,15 @@ public sealed class DmMessageViewModel
         IsMine = message.SenderId == currentUserId;
     }
 
+    public string Id => _message.Id;
     public string Body => _message.Body;
     public string TimeFormatted => _message.TimeFormatted;
     public bool IsMine { get; }
+
+    public IReadOnlyList<string> ImageUrls => _message.ImageUrls ?? (IReadOnlyList<string>)Array.Empty<string>();
+    public bool HasImages => _message.ImageUrls is { Count: > 0 };
+
+    // A message is "trashed" from this user's perspective when it's their own
+    // and they've soft-deleted it (SenderDeletedAt). The bubble dims/relabels.
+    public bool IsTrashed => IsMine && _message.SenderDeletedAt is not null;
 }
