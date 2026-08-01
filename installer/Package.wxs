@@ -39,6 +39,17 @@
         <RemoveFolder Id="RemoveApplicationProgramsFolder" On="uninstall" />
         <RegistryValue Root="HKCU" Key="Software\InterlinedList" Name="installed" Type="integer" Value="1" KeyPath="yes" />
       </Component>
+
+      <!-- Start Menu shortcut for the background sync utility (also autostarts; see below). -->
+      <Component Id="SyncShortcut" Guid="C1F2A3B4-6D9E-4F0A-8B2C-4E7D9A1B3C56">
+        <Shortcut Id="SyncStartMenuShortcut"
+                  Name="InterlinedList Sync"
+                  Description="Keep a local folder of documents in sync for Obsidian."
+                  Target="[INSTALLFOLDER]InterlinedList.Sync.exe"
+                  WorkingDirectory="INSTALLFOLDER"
+                  Icon="InterlinedList.ico" />
+        <RegistryValue Root="HKCU" Key="Software\InterlinedList" Name="syncShortcut" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
     </DirectoryRef>
 
     <ComponentGroup Id="AppFiles" Directory="INSTALLFOLDER">
@@ -60,10 +71,32 @@
                      Name="TypesSupported" Type="integer" Value="7" />
     </Component>
 
+    <!-- Launch the sync utility at login (per-user HKCU Run; no elevation needed to run). -->
+    <Component Id="SyncAutoStart" Directory="INSTALLFOLDER" Guid="A3D9B1E2-4C7F-4B8A-9E1D-2F6C8A0B5D34">
+      <RegistryValue Root="HKCU"
+                     Key="Software\Microsoft\Windows\CurrentVersion\Run"
+                     Name="InterlinedListSync" Type="string"
+                     Value="&quot;[INSTALLFOLDER]InterlinedList.Sync.exe&quot;" KeyPath="yes" />
+    </Component>
+
+    <!-- Event Log source for the sync utility (parallels the app's, created elevated). -->
+    <Component Id="SyncEventLogSource" Directory="INSTALLFOLDER" Guid="B7E0C3F4-5A8D-4E2B-8C1F-3A9D6B2E7C15">
+      <RegistryValue Root="HKLM"
+                     Key="SYSTEM\CurrentControlSet\Services\EventLog\Application\InterlinedListSync"
+                     Name="EventMessageFile" Type="expandable"
+                     Value="%SystemRoot%\System32\EventCreate.exe" KeyPath="yes" />
+      <RegistryValue Root="HKLM"
+                     Key="SYSTEM\CurrentControlSet\Services\EventLog\Application\InterlinedListSync"
+                     Name="TypesSupported" Type="integer" Value="7" />
+    </Component>
+
     <Feature Id="MainFeature" Title="InterlinedList" Level="1">
       <ComponentGroupRef Id="AppFiles" />
       <ComponentRef Id="ApplicationShortcut" />
       <ComponentRef Id="EventLogSource" />
+      <ComponentRef Id="SyncShortcut" />
+      <ComponentRef Id="SyncAutoStart" />
+      <ComponentRef Id="SyncEventLogSource" />
     </Feature>
 
     <ui:WixUI Id="WixUI_Minimal" />

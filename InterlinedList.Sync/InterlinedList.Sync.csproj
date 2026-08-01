@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Windows-only tray host for the sync engine. Owns everything platform-specific:
+       WPF tray UI (Hardcodet), DPAPI token read (shared with the main app),
+       HKCU autostart, FileSystemWatcher host. The engine itself is in the
+       platform-neutral InterlinedList.Sync.Core project this references. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <!-- Lets `dotnet build` on macOS syntax-check this Windows-only project. -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <AssemblyName>InterlinedList.Sync</AssemblyName>
+    <RootNamespace>InterlinedList.Sync</RootNamespace>
+    <ApplicationIcon>..\brand-kit\icons\windows\InterlinedList.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <!-- The WPF SDK's implicit-usings set omits these two; add them globally so the
+       Windows-only helpers don't each need a redundant using. -->
+  <ItemGroup>
+    <Using Include="System.IO" />
+    <Using Include="System.Net.Http" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Hardcodet.NotifyIcon.Wpf" Version="2.0.1" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.10" />
+    <PackageReference Include="System.Diagnostics.EventLog" Version="10.0.10" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\InterlinedList.Sync.Core\InterlinedList.Sync.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Tray icon, copied beside the exe and loaded at runtime. -->
+    <None Include="..\brand-kit\icons\windows\InterlinedList.ico" Link="tray.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>

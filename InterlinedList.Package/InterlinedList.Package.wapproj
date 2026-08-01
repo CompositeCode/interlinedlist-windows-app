@@ -42,6 +42,12 @@
     <ProjectReference Include="..\InterlinedList\InterlinedList.csproj">
       <Name>InterlinedList</Name>
     </ProjectReference>
+    <!-- Bundles the background sync tray utility into the same MSIX. Its
+         <RuntimeIdentifiers>win-x64</RuntimeIdentifiers> lets this nested publish
+         restore (NETSDK1047 otherwise, same as the main app). -->
+    <ProjectReference Include="..\InterlinedList.Sync\InterlinedList.Sync.csproj">
+      <Name>InterlinedList.Sync</Name>
+    </ProjectReference>
   </ItemGroup>
 
   <Import Project="$(MSBuildExtensionsPath)\Microsoft\DesktopBridge\Microsoft.DesktopBridge.targets" />

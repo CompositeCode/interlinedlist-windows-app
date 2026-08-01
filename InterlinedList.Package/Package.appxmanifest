@@ -3,8 +3,9 @@
   xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
   xmlns:mp="http://schemas.microsoft.com/appx/2014/phone/manifest"
   xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:uap5="http://schemas.microsoft.com/appx/manifest/uap/windows10/5"
   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
-  IgnorableNamespaces="uap mp rescap">
+  IgnorableNamespaces="uap uap5 mp rescap">
 
   <Identity
     Name="InterlinedList"
@@ -37,6 +38,22 @@
         Square44x44Logo="Images\Square44x44Logo.png">
         <uap:SplashScreen Image="Images\SplashScreen.png" BackgroundColor="#0C2C3A" />
       </uap:VisualElements>
+    </Application>
+
+    <!-- Background document-sync tray utility. Auto-launches at login via the
+         windows.startupTask extension (the MSIX equivalent of the MSI's Run key). -->
+    <Application Id="InterlinedListSync" Executable="InterlinedList.Sync.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements
+        DisplayName="InterlinedList Sync"
+        Description="Keep a local folder of documents in sync for Obsidian."
+        BackgroundColor="#0C2C3A"
+        Square150x150Logo="Images\Square150x150Logo.png"
+        Square44x44Logo="Images\Square44x44Logo.png" />
+      <Extensions>
+        <uap5:Extension Category="windows.startupTask" Executable="InterlinedList.Sync.exe" EntryPoint="Windows.FullTrustApplication">
+          <uap5:StartupTask TaskId="InterlinedListSyncStartup" Enabled="true" DisplayName="InterlinedList Sync" />
+        </uap5:Extension>
+      </Extensions>
     </Application>
   </Applications>
 

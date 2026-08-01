@@ -1,5 +1,8 @@
 <Solution>
   <Project Path="InterlinedList/InterlinedList.csproj" />
+  <Project Path="InterlinedList.Sync.Core/InterlinedList.Sync.Core.csproj" />
+  <Project Path="InterlinedList.Sync/InterlinedList.Sync.csproj" />
+  <Project Path="InterlinedList.Sync.Core.Tests/InterlinedList.Sync.Core.Tests.csproj" />
   <Project Path="installer/InterlinedList.Installer.wixproj" />
   <Project Path="InterlinedList.Package/InterlinedList.Package.wapproj" />
 </Solution>
