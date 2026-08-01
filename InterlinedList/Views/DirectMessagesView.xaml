@@ -1,0 +1,323 @@
+<UserControl x:Class="InterlinedList.Views.DirectMessagesView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:InterlinedList.ViewModels"
+             xmlns:local="clr-namespace:InterlinedList.Views"
+             Background="{DynamicResource AppBgBrush}">
+
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
+        <local:InverseNullToVisibilityConverter x:Key="InverseNullToVisibility"/>
+        <local:NullOrEmptyToVisibilityConverter x:Key="NullOrEmptyToVisibility"/>
+
+        <!-- Primary green button (matches FeedView) -->
+        <Style x:Key="PrimaryBtnStyle" TargetType="Button">
+            <Setter Property="Background" Value="{DynamicResource PrimaryBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="16,6"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bg"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="4"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="Background"
+                                        Value="{DynamicResource PrimaryHoverBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Bg" Property="Opacity" Value="0.5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>  <!-- Header -->
+            <RowDefinition Height="Auto"/>  <!-- Error banner -->
+            <RowDefinition Height="*"/>     <!-- Two-column body -->
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <Border Grid.Row="0"
+                Background="{DynamicResource SurfaceBrush}"
+                BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="0,0,0,1"
+                Padding="20,12">
+            <Grid>
+                <TextBlock Text="Direct Messages"
+                           FontSize="17" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextBrush}"
+                           VerticalAlignment="Center"/>
+                <TextBlock Text="Loading…"
+                           HorizontalAlignment="Right"
+                           FontSize="12"
+                           Foreground="{DynamicResource TextMutedBrush}"
+                           Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibility}}"/>
+            </Grid>
+        </Border>
+
+        <!-- Error banner -->
+        <Border Grid.Row="1"
+                Background="#1AE81123"
+                Padding="20,8">
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Setter Property="Visibility" Value="Visible"/>
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding ErrorMessage}" Value="{x:Null}">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+            <TextBlock Text="{Binding ErrorMessage}"
+                       FontSize="12"
+                       Foreground="#FFE81123"
+                       TextWrapping="Wrap"/>
+        </Border>
+
+        <!-- Two-column body -->
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="240"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- LEFT: recipient list -->
+            <Border Grid.Column="0"
+                    Background="{DynamicResource Surface2Brush}"
+                    BorderBrush="{DynamicResource BorderBrush}"
+                    BorderThickness="0,0,1,0">
+                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled"
+                              Padding="8,8">
+                    <ItemsControl ItemsSource="{Binding Recipients}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Button Margin="0,0,0,2"
+                                        HorizontalContentAlignment="Stretch"
+                                        Cursor="Hand"
+                                        Command="{Binding DataContext.SelectRecipientCommand,
+                                                  RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                        CommandParameter="{Binding}">
+                                    <Button.Template>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border x:Name="Row"
+                                                    Background="Transparent"
+                                                    CornerRadius="4"
+                                                    Padding="8,6">
+                                                <ContentPresenter/>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="Row" Property="Background"
+                                                            Value="{DynamicResource Surface3Brush}"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Button.Template>
+                                    <DockPanel>
+                                        <Border DockPanel.Dock="Left"
+                                                Width="24" Height="24"
+                                                CornerRadius="999"
+                                                ClipToBounds="True"
+                                                Background="{DynamicResource Surface3Brush}"
+                                                Margin="0,0,8,0"
+                                                VerticalAlignment="Center">
+                                            <Image Source="{Binding Avatar}" Stretch="UniformToFill"/>
+                                        </Border>
+                                        <StackPanel VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding DisplayNameOrUsername}"
+                                                       FontSize="12" FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource TextBrush}"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock Text="{Binding Handle}"
+                                                       FontSize="11"
+                                                       Foreground="{DynamicResource TextMutedBrush}"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                        </StackPanel>
+                                    </DockPanel>
+                                </Button>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </Border>
+
+            <!-- RIGHT: selected conversation -->
+            <Grid Grid.Column="1">
+
+                <!-- Empty state (no recipient selected) -->
+                <TextBlock Text="Select a conversation"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center"
+                           FontSize="14"
+                           Foreground="{DynamicResource TextMutedBrush}"
+                           Visibility="{Binding SelectedRecipient, Converter={StaticResource InverseNullToVisibility}}"/>
+
+                <!-- Conversation -->
+                <Grid Visibility="{Binding HasSelection, Converter={StaticResource BoolToVisibility}}">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>  <!-- Conversation header -->
+                        <RowDefinition Height="*"/>     <!-- Messages -->
+                        <RowDefinition Height="Auto"/>  <!-- Compose -->
+                    </Grid.RowDefinitions>
+
+                    <!-- Conversation header -->
+                    <Border Grid.Row="0"
+                            Background="{DynamicResource SurfaceBrush}"
+                            BorderBrush="{DynamicResource BorderBrush}"
+                            BorderThickness="0,0,0,1"
+                            Padding="16,10">
+                        <DockPanel DataContext="{Binding SelectedRecipient}">
+                            <Border DockPanel.Dock="Left"
+                                    Width="28" Height="28"
+                                    CornerRadius="999"
+                                    ClipToBounds="True"
+                                    Background="{DynamicResource Surface3Brush}"
+                                    Margin="0,0,10,0"
+                                    VerticalAlignment="Center">
+                                <Image Source="{Binding Avatar}" Stretch="UniformToFill"/>
+                            </Border>
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="{Binding DisplayNameOrUsername}"
+                                           FontSize="14" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextBrush}"/>
+                                <TextBlock Text="{Binding Handle}"
+                                           FontSize="11"
+                                           Foreground="{DynamicResource TextMutedBrush}"/>
+                            </StackPanel>
+                        </DockPanel>
+                    </Border>
+
+                    <!-- Message list -->
+                    <ScrollViewer Grid.Row="1"
+                                  VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled"
+                                  Padding="16,12">
+                        <ItemsControl ItemsSource="{Binding Messages}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type vm:DmMessageViewModel}">
+                                    <Grid Margin="0,0,0,8">
+                                        <!-- Others: left-aligned, SurfaceBrush -->
+                                        <Border HorizontalAlignment="Left"
+                                                MaxWidth="420"
+                                                Background="{DynamicResource SurfaceBrush}"
+                                                BorderBrush="{DynamicResource BorderBrush}"
+                                                BorderThickness="1"
+                                                CornerRadius="4"
+                                                Padding="10,8">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsMine}" Value="True">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+                                            <StackPanel>
+                                                <TextBlock Text="{Binding Body}"
+                                                           FontSize="13"
+                                                           Foreground="{DynamicResource TextBodyBrush}"
+                                                           TextWrapping="Wrap"
+                                                           LineHeight="20"/>
+                                                <TextBlock Text="{Binding TimeFormatted}"
+                                                           FontFamily="JetBrains Mono, Consolas"
+                                                           FontSize="10"
+                                                           Foreground="{DynamicResource TextMutedBrush}"
+                                                           Margin="0,4,0,0"
+                                                           HorizontalAlignment="Left"/>
+                                            </StackPanel>
+                                        </Border>
+
+                                        <!-- Mine: right-aligned, teal-ish (Surface3Brush + teal accent) -->
+                                        <Border HorizontalAlignment="Right"
+                                                MaxWidth="420"
+                                                Background="{DynamicResource Surface3Brush}"
+                                                BorderBrush="{StaticResource TealBrush}"
+                                                BorderThickness="0,0,3,0"
+                                                CornerRadius="4"
+                                                Padding="10,8"
+                                                Visibility="Collapsed">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsMine}" Value="True">
+                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+                                            <StackPanel>
+                                                <TextBlock Text="{Binding Body}"
+                                                           FontSize="13"
+                                                           Foreground="{DynamicResource TextBodyBrush}"
+                                                           TextWrapping="Wrap"
+                                                           LineHeight="20"/>
+                                                <TextBlock Text="{Binding TimeFormatted}"
+                                                           FontFamily="JetBrains Mono, Consolas"
+                                                           FontSize="10"
+                                                           Foreground="{DynamicResource TextMutedBrush}"
+                                                           Margin="0,4,0,0"
+                                                           HorizontalAlignment="Right"/>
+                                            </StackPanel>
+                                        </Border>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+
+                    <!-- Compose -->
+                    <Border Grid.Row="2"
+                            Background="{DynamicResource Surface2Brush}"
+                            BorderBrush="{DynamicResource BorderBrush}"
+                            BorderThickness="0,1,0,0"
+                            Padding="16,12">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBox Grid.Column="0"
+                                     Text="{Binding ComposeText, UpdateSourceTrigger=PropertyChanged}"
+                                     AcceptsReturn="True"
+                                     TextWrapping="Wrap"
+                                     MinHeight="40"
+                                     MaxHeight="120"
+                                     Padding="10,8"
+                                     FontSize="13"
+                                     VerticalContentAlignment="Center"
+                                     Background="{DynamicResource SurfaceBrush}"
+                                     Foreground="{DynamicResource TextBodyBrush}"
+                                     BorderBrush="{DynamicResource BorderBrush}"
+                                     BorderThickness="1"/>
+                            <Button Grid.Column="1"
+                                    Content="Send"
+                                    Command="{Binding SendCommand}"
+                                    Margin="8,0,0,0"
+                                    VerticalAlignment="Bottom"
+                                    Style="{StaticResource PrimaryBtnStyle}"/>
+                        </Grid>
+                    </Border>
+                </Grid>
+            </Grid>
+        </Grid>
+    </Grid>
+</UserControl>

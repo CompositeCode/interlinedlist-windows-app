@@ -1,0 +1,220 @@
+<Window x:Class="InterlinedList.LoginWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+        Title="InterlinedList — Log In"
+        Height="560" Width="420"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource AppBgBrush}">
+
+    <!-- WindowChrome: native drag/snap with a custom caption area -->
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="36"
+                      CornerRadius="0"
+                      GlassFrameThickness="0"
+                      ResizeBorderThickness="6"/>
+    </WindowChrome.WindowChrome>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="36"/>  <!-- Title bar -->
+            <RowDefinition Height="*"/>   <!-- Body -->
+        </Grid.RowDefinitions>
+
+        <!-- ── Custom title bar ─────────────────────────────────────── -->
+        <Grid Grid.Row="0" Background="{StaticResource TitlebarBrush}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Logo + app name (drag region) -->
+            <StackPanel Grid.Column="0"
+                        Orientation="Horizontal"
+                        VerticalAlignment="Center"
+                        Margin="12,0,0,0">
+                <Image Source="../brand-kit/logo/logo-icon.svg"
+                       Width="18" Height="18"
+                       Margin="0,0,8,0"
+                       VerticalAlignment="Center"/>
+                <TextBlock Text="InterlinedList"
+                           Foreground="{StaticResource TitlebarTextBrush}"
+                           FontSize="12"
+                           FontWeight="SemiBold"
+                           VerticalAlignment="Center"/>
+            </StackPanel>
+
+            <!-- Window controls: Minimize / Close (no maximize on a fixed-size dialog) -->
+            <StackPanel Grid.Column="1"
+                        Orientation="Horizontal"
+                        WindowChrome.IsHitTestVisibleInChrome="True">
+
+                <Button x:Name="BtnMinimize"
+                        ToolTip="Minimize"
+                        Click="BtnMinimize_Click"
+                        Style="{StaticResource TitlebarBtnStyle}">
+                    <Path Data="M0,5 H10" Stroke="White" StrokeThickness="1.2"
+                          Width="10" Height="10" Stretch="None"
+                          HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Button>
+
+                <Button x:Name="BtnClose"
+                        ToolTip="Close"
+                        Click="BtnClose_Click"
+                        Style="{StaticResource TitlebarCloseBtnStyle}">
+                    <Path Data="M1,1 L9,9 M9,1 L1,9"
+                          Stroke="White" StrokeThickness="1.2"
+                          Width="10" Height="10" Stretch="None"
+                          HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Button>
+
+            </StackPanel>
+        </Grid>
+
+        <!-- ── Body: centered login card ────────────────────────────── -->
+        <Grid Grid.Row="1">
+            <Border Width="320"
+                    VerticalAlignment="Center"
+                    HorizontalAlignment="Center"
+                    Background="{DynamicResource SurfaceBrush}"
+                    BorderBrush="{DynamicResource BorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="4"
+                    Padding="28,32">
+                <StackPanel>
+
+                    <Image Source="../brand-kit/logo/logo-icon.svg"
+                           Width="40" Height="40"
+                           Margin="0,0,0,12"
+                           HorizontalAlignment="Center"/>
+
+                    <TextBlock Text="Log in to InterlinedList"
+                               FontSize="16" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextBrush}"
+                               HorizontalAlignment="Center"
+                               Margin="0,0,0,20"/>
+
+                    <TextBlock Text="EMAIL"
+                               FontSize="10" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextMutedBrush}"
+                               Margin="0,0,0,4"/>
+                    <TextBox x:Name="EmailInput"
+                             Text="{Binding Email, UpdateSourceTrigger=PropertyChanged}"
+                             FontSize="13"
+                             Padding="8,6"
+                             Margin="0,0,0,14"
+                             Background="{DynamicResource Surface2Brush}"
+                             BorderBrush="{DynamicResource BorderBrush}"
+                             BorderThickness="1"
+                             Foreground="{DynamicResource TextBrush}"/>
+
+                    <TextBlock Text="PASSWORD"
+                               FontSize="10" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextMutedBrush}"
+                               Margin="0,0,0,4"/>
+                    <PasswordBox x:Name="PasswordInput"
+                                 FontSize="13"
+                                 Padding="8,6"
+                                 Margin="0,0,0,6"
+                                 Background="{DynamicResource Surface2Brush}"
+                                 BorderBrush="{DynamicResource BorderBrush}"
+                                 BorderThickness="1"
+                                 Foreground="{DynamicResource TextBrush}"
+                                 KeyDown="PasswordInput_KeyDown"/>
+
+                    <TextBlock x:Name="ErrorText"
+                               Text="{Binding ErrorMessage}"
+                               FontSize="12"
+                               Foreground="#FFE81123"
+                               TextWrapping="Wrap"
+                               Visibility="Collapsed"
+                               Margin="0,4,0,4"/>
+
+                    <Button x:Name="BtnLogin"
+                            Content="Log In"
+                            Click="BtnLogin_Click"
+                            Style="{StaticResource PrimaryBtnStyle}"
+                            HorizontalAlignment="Stretch"
+                            Margin="0,10,0,0"/>
+
+                </StackPanel>
+            </Border>
+        </Grid>
+    </Grid>
+
+    <!-- ── Styles (local: not shared across windows) ────────────────── -->
+    <Window.Resources>
+
+        <!-- Title bar button base -->
+        <Style x:Key="TitlebarBtnStyle" TargetType="Button">
+            <Setter Property="Width" Value="46"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="WindowChrome.IsHitTestVisibleInChrome" Value="True"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bg" Background="{TemplateBinding Background}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="#1EFFFFFF"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="#14FFFFFF"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Close button (red hover) -->
+        <Style x:Key="TitlebarCloseBtnStyle" TargetType="Button"
+               BasedOn="{StaticResource TitlebarBtnStyle}">
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#FFE81123"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Primary green button -->
+        <Style x:Key="PrimaryBtnStyle" TargetType="Button">
+            <Setter Property="Background" Value="{DynamicResource PrimaryBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="16,8"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bg"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="4"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="Background"
+                                        Value="{DynamicResource PrimaryHoverBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Bg" Property="Opacity" Value="0.6"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+    </Window.Resources>
+
+</Window>

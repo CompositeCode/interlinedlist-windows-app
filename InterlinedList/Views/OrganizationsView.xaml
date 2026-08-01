@@ -1,0 +1,560 @@
+<UserControl x:Class="InterlinedList.Views.OrganizationsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:vm="clr-namespace:InterlinedList.ViewModels"
+             xmlns:models="clr-namespace:InterlinedList.Models"
+             mc:Ignorable="d"
+             d:DesignHeight="700" d:DesignWidth="1100"
+             Background="{DynamicResource AppBgBrush}">
+
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
+
+        <Style x:Key="FieldStyle" TargetType="TextBox">
+            <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextBodyBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="8,6"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Margin" Value="0,0,0,8"/>
+        </Style>
+
+        <Style x:Key="SmallBtnStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="10,3"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="3"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="PrimaryBtnStyle" TargetType="Button">
+            <Setter Property="Background" Value="{DynamicResource PrimaryBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="14,6"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                CornerRadius="4"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="{DynamicResource PrimaryHoverBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Visible only when ErrorMessage is non-null/non-empty -->
+        <Style x:Key="ErrorTextStyle" TargetType="TextBlock">
+            <Setter Property="Visibility" Value="Visible"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding ErrorMessage}" Value="{x:Null}">
+                    <Setter Property="Visibility" Value="Collapsed"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding ErrorMessage}" Value="">
+                    <Setter Property="Visibility" Value="Collapsed"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Visible only when the bound collection is empty -->
+        <Style x:Key="EmptyHintStyle" TargetType="TextBlock">
+            <Setter Property="Visibility" Value="Collapsed"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding MyOrganizations.Count}" Value="0">
+                    <Setter Property="Visibility" Value="Visible"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Visible only when SelectedOrganization is null -->
+        <Style x:Key="NoSelectionHintStyle" TargetType="TextBlock">
+            <Setter Property="Visibility" Value="Collapsed"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding SelectedOrganization}" Value="{x:Null}">
+                    <Setter Property="Visibility" Value="Visible"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Whole management area: shown only when an org is selected -->
+        <Style x:Key="OrgDetailStyle" TargetType="FrameworkElement">
+            <Setter Property="Visibility" Value="Visible"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding SelectedOrganization}" Value="{x:Null}">
+                    <Setter Property="Visibility" Value="Collapsed"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Owner/admin-only affordances -->
+        <Style x:Key="ManageOnlyStyle" TargetType="FrameworkElement">
+            <Setter Property="Visibility" Value="Collapsed"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding CanManageMembers}" Value="True">
+                    <Setter Property="Visibility" Value="Visible"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Owner-only affordances (delete org) -->
+        <Style x:Key="OwnerOnlyStyle" TargetType="FrameworkElement">
+            <Setter Property="Visibility" Value="Collapsed"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding CanDeleteOrganization}" Value="True">
+                    <Setter Property="Visibility" Value="Visible"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Edit-org form: visible only while editing -->
+        <Style x:Key="EditFormStyle" TargetType="FrameworkElement">
+            <Setter Property="Visibility" Value="Collapsed"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsEditingOrganization}" Value="True">
+                    <Setter Property="Visibility" Value="Visible"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- No members hint -->
+        <Style x:Key="NoMembersHintStyle" TargetType="TextBlock">
+            <Setter Property="Visibility" Value="Collapsed"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Members.Count}" Value="0">
+                    <Setter Property="Visibility" Value="Visible"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Visible only when SelectedOrganization.Role is non-null -->
+        <Style x:Key="RoleLineStyle" TargetType="TextBlock">
+            <Setter Property="Visibility" Value="Visible"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding SelectedOrganization.Role}" Value="{x:Null}">
+                    <Setter Property="Visibility" Value="Collapsed"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Role badge, shown only when Role is non-null (my-organizations items) -->
+        <Style x:Key="RoleBadgeStyle" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource TealBrush}"/>
+            <Setter Property="CornerRadius" Value="3"/>
+            <Setter Property="Padding" Value="6,2"/>
+            <Setter Property="Margin" Value="8,0,0,0"/>
+            <Setter Property="Visibility" Value="Visible"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Role}" Value="{x:Null}">
+                    <Setter Property="Visibility" Value="Collapsed"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Member row: avatar + name/handle + role badge, and (owner/admin only)
+             Promote / Demote / Remove actions. Item-row commands reach the VM via
+             the UserControl's DataContext. -->
+        <DataTemplate x:Key="MemberItemTemplate" DataType="{x:Type models:OrgMember}">
+            <Border Margin="0,0,0,6"
+                    Background="{DynamicResource Surface2Brush}"
+                    BorderBrush="{DynamicResource BorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="4"
+                    Padding="10,8">
+                <DockPanel>
+                    <!-- Avatar -->
+                    <Border DockPanel.Dock="Left"
+                            Width="28" Height="28"
+                            CornerRadius="999"
+                            ClipToBounds="True"
+                            Background="{DynamicResource Surface3Brush}"
+                            Margin="0,0,10,0"
+                            VerticalAlignment="Center">
+                        <Image Source="{Binding Avatar}" Stretch="UniformToFill"/>
+                    </Border>
+
+                    <!-- Management actions (owner/admin only), right-aligned -->
+                    <StackPanel DockPanel.Dock="Right"
+                                Orientation="Horizontal"
+                                VerticalAlignment="Center"
+                                Visibility="{Binding DataContext.CanManageMembers, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibility}}">
+                        <Button Content="Promote"
+                                Command="{Binding DataContext.PromoteMemberCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                CommandParameter="{Binding}"
+                                Style="{StaticResource SmallBtnStyle}"
+                                Margin="0,0,6,0"/>
+                        <Button Content="Demote"
+                                Command="{Binding DataContext.DemoteMemberCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                CommandParameter="{Binding}"
+                                Style="{StaticResource SmallBtnStyle}"
+                                Margin="0,0,6,0"/>
+                        <Button Content="Remove"
+                                Command="{Binding DataContext.RemoveOrgMemberCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                CommandParameter="{Binding}"
+                                Style="{StaticResource SmallBtnStyle}"/>
+                    </StackPanel>
+
+                    <!-- Role badge (always shown) -->
+                    <Border DockPanel.Dock="Right"
+                            Background="{StaticResource TealBrush}"
+                            CornerRadius="3"
+                            Padding="6,2"
+                            Margin="8,0,10,0"
+                            VerticalAlignment="Center">
+                        <TextBlock Text="{Binding RoleLabel}"
+                                   FontSize="9" FontWeight="SemiBold"
+                                   Foreground="White"/>
+                    </Border>
+
+                    <!-- Name + handle -->
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="{Binding DisplayNameOrUsername}"
+                                   FontSize="13" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextBrush}"/>
+                        <TextBlock Text="{Binding Handle}"
+                                   FontSize="11"
+                                   FontFamily="JetBrains Mono, Consolas"
+                                   Foreground="{DynamicResource TextMutedBrush}"/>
+                    </StackPanel>
+                </DockPanel>
+            </Border>
+        </DataTemplate>
+
+        <!-- User search result row (add-member picker): clicking adds as "member". -->
+        <DataTemplate x:Key="UserResultTemplate" DataType="{x:Type models:UserSearchResult}">
+            <Border Margin="0,0,0,6"
+                    Background="{DynamicResource Surface2Brush}"
+                    BorderBrush="{DynamicResource BorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="4"
+                    Padding="10,8">
+                <DockPanel>
+                    <Border DockPanel.Dock="Left"
+                            Width="28" Height="28"
+                            CornerRadius="999"
+                            ClipToBounds="True"
+                            Background="{DynamicResource Surface3Brush}"
+                            Margin="0,0,10,0"
+                            VerticalAlignment="Center">
+                        <Image Source="{Binding Avatar}" Stretch="UniformToFill"/>
+                    </Border>
+                    <Button DockPanel.Dock="Right"
+                            Content="Add"
+                            Command="{Binding DataContext.AddMemberCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                            CommandParameter="{Binding}"
+                            Style="{StaticResource PrimaryBtnStyle}"
+                            VerticalAlignment="Center"/>
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="{Binding DisplayName}"
+                                   FontSize="13" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextBrush}"/>
+                        <TextBlock FontSize="11"
+                                   FontFamily="JetBrains Mono, Consolas"
+                                   Foreground="{DynamicResource TextMutedBrush}">
+                            <Run Text="@"/><Run Text="{Binding Username, Mode=OneWay}"/>
+                        </TextBlock>
+                    </StackPanel>
+                </DockPanel>
+            </Border>
+        </DataTemplate>
+
+        <DataTemplate x:Key="OrgItemTemplate" DataType="{x:Type models:OrganizationSummary}">
+            <Border Margin="0,0,0,8"
+                    Background="{DynamicResource Surface2Brush}"
+                    BorderBrush="{DynamicResource BorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="4"
+                    Padding="10,8"
+                    Cursor="Hand">
+                <Border.InputBindings>
+                    <MouseBinding MouseAction="LeftClick"
+                                  Command="{Binding DataContext.SelectOrganizationCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                  CommandParameter="{Binding}"/>
+                </Border.InputBindings>
+                <StackPanel>
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Left"
+                                   Text="{Binding Name}"
+                                   FontSize="13" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextBrush}"
+                                   TextWrapping="Wrap"/>
+                        <Border DockPanel.Dock="Left" Style="{StaticResource RoleBadgeStyle}">
+                            <TextBlock Text="{Binding Role}"
+                                       FontSize="9" FontWeight="SemiBold"
+                                       Foreground="White"/>
+                        </Border>
+                    </DockPanel>
+                    <TextBlock Text="{Binding Description}"
+                               FontSize="11"
+                               Foreground="{DynamicResource TextMutedBrush}"
+                               TextWrapping="Wrap"
+                               MaxHeight="34"
+                               Margin="0,2,0,4"/>
+                    <TextBlock FontSize="10"
+                               FontFamily="JetBrains Mono, Consolas"
+                               Foreground="{DynamicResource TextMutedBrush}">
+                        <Run Text="{Binding MemberCount, Mode=OneWay}"/><Run Text=" members"/>
+                    </TextBlock>
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="380"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- ── Left pane: my orgs, all orgs, create form ─────────────── -->
+        <Border Grid.Column="0"
+                Background="{DynamicResource SurfaceBrush}"
+                BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="0,0,1,0">
+            <ScrollViewer VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled">
+                <StackPanel Margin="16">
+
+                    <Grid Margin="0,0,0,8">
+                        <TextBlock Text="Organizations"
+                                   FontSize="17" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextBrush}"/>
+                        <TextBlock Text="Loading…"
+                                   HorizontalAlignment="Right"
+                                   FontSize="12"
+                                   Foreground="{DynamicResource TextMutedBrush}"
+                                   Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibility}}"/>
+                    </Grid>
+
+                    <TextBlock Text="{Binding ErrorMessage}"
+                               Foreground="#FFE81123"
+                               FontSize="11"
+                               TextWrapping="Wrap"
+                               Margin="0,0,0,8"
+                               Style="{StaticResource ErrorTextStyle}"/>
+
+                    <!-- Member management note -->
+                    <TextBlock Text="Select an organization to view its members. Owners and admins can add, remove, and change the roles of members here."
+                               FontSize="11"
+                               FontStyle="Italic"
+                               Foreground="{DynamicResource TextMutedBrush}"
+                               TextWrapping="Wrap"
+                               Margin="0,0,0,16"/>
+
+                    <!-- My organizations -->
+                    <TextBlock Text="MY ORGANIZATIONS"
+                               FontSize="10" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextMutedBrush}"
+                               Margin="0,0,0,8"/>
+                    <ItemsControl ItemsSource="{Binding MyOrganizations}"
+                                  ItemTemplate="{StaticResource OrgItemTemplate}"
+                                  Margin="0,0,0,8"/>
+                    <TextBlock Text="You don't belong to any organizations yet."
+                               FontSize="11"
+                               Foreground="{DynamicResource TextMutedBrush}"
+                               Margin="0,0,0,16"
+                               Style="{StaticResource EmptyHintStyle}"/>
+
+                    <!-- Create organization -->
+                    <TextBlock Text="CREATE ORGANIZATION"
+                               FontSize="10" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextMutedBrush}"
+                               Margin="0,0,0,8"/>
+                    <TextBox Text="{Binding NewOrgName, UpdateSourceTrigger=PropertyChanged}"
+                             Style="{StaticResource FieldStyle}"
+                             Tag="Name"/>
+                    <TextBox Text="{Binding NewOrgDescription, UpdateSourceTrigger=PropertyChanged}"
+                             Style="{StaticResource FieldStyle}"
+                             AcceptsReturn="True"
+                             TextWrapping="Wrap"
+                             MinHeight="52"/>
+                    <CheckBox Content="Public organization"
+                              IsChecked="{Binding NewOrgIsPublic}"
+                              Foreground="{DynamicResource TextBodyBrush}"
+                              FontSize="12"
+                              Margin="0,0,0,8"/>
+                    <Button Content="Create organization"
+                            Command="{Binding CreateOrganizationCommand}"
+                            HorizontalAlignment="Left"
+                            Style="{StaticResource PrimaryBtnStyle}"
+                            Margin="0,0,0,16"/>
+
+                    <!-- All organizations directory -->
+                    <TextBlock Text="ALL ORGANIZATIONS"
+                               FontSize="10" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextMutedBrush}"
+                               Margin="0,0,0,8"/>
+                    <ItemsControl ItemsSource="{Binding AllOrganizations}"
+                                  ItemTemplate="{StaticResource OrgItemTemplate}"/>
+
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+
+        <!-- ── Right pane: selected organization detail ──────────────── -->
+        <Grid Grid.Column="1">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <Border Grid.Row="0"
+                    Background="{DynamicResource SurfaceBrush}"
+                    BorderBrush="{DynamicResource BorderBrush}"
+                    BorderThickness="0,0,0,1"
+                    Padding="20,12">
+                <TextBlock Text="{Binding SelectedOrganization.Name}"
+                           FontSize="17" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextBrush}"/>
+            </Border>
+
+            <Grid Grid.Row="1">
+                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled"
+                              Style="{StaticResource OrgDetailStyle}">
+                    <StackPanel Margin="20,16" MaxWidth="620" HorizontalAlignment="Left">
+                        <TextBlock Text="{Binding SelectedOrganization.Description}"
+                                   FontSize="13"
+                                   Foreground="{DynamicResource TextBodyBrush}"
+                                   TextWrapping="Wrap"
+                                   Margin="0,0,0,12"/>
+                        <TextBlock FontSize="12" Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,0,4">
+                            <Run Text="Slug: "/><Run Text="{Binding SelectedOrganization.Slug, Mode=OneWay}"/>
+                        </TextBlock>
+                        <TextBlock FontSize="12" Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,0,4">
+                            <Run Text="Members: "/><Run Text="{Binding SelectedOrganization.MemberCount, Mode=OneWay}"/>
+                        </TextBlock>
+                        <TextBlock FontSize="12" Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,0,4">
+                            <Run Text="Visibility: "/><Run Text="{Binding SelectedOrganization.IsPublic, Mode=OneWay}"/>
+                        </TextBlock>
+                        <TextBlock FontSize="12" Foreground="{DynamicResource TextMutedBrush}"
+                                   Style="{StaticResource RoleLineStyle}">
+                            <Run Text="Your role: "/><Run Text="{Binding SelectedOrganization.Role, Mode=OneWay}"/>
+                        </TextBlock>
+
+                        <!-- Owner/admin: edit / delete org affordances -->
+                        <StackPanel Orientation="Horizontal"
+                                    Margin="0,12,0,0"
+                                    Style="{StaticResource ManageOnlyStyle}">
+                            <Button Content="Edit organization"
+                                    Command="{Binding BeginEditOrganizationCommand}"
+                                    Style="{StaticResource SmallBtnStyle}"
+                                    Margin="0,0,8,0"/>
+                            <Button Content="Delete organization"
+                                    Command="{Binding DeleteOrganizationCommand}"
+                                    Style="{StaticResource SmallBtnStyle}"
+                                    Foreground="#FFE81123"
+                                    BorderBrush="#FFE81123"
+                                    Visibility="{Binding CanDeleteOrganization, Converter={StaticResource BoolToVisibility}}"/>
+                        </StackPanel>
+
+                        <!-- Edit-org form (visible while editing) -->
+                        <StackPanel Margin="0,12,0,0"
+                                    Style="{StaticResource EditFormStyle}">
+                            <TextBlock Text="EDIT ORGANIZATION"
+                                       FontSize="10" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextMutedBrush}"
+                                       Margin="0,0,0,8"/>
+                            <TextBox Text="{Binding EditOrgName, UpdateSourceTrigger=PropertyChanged}"
+                                     Style="{StaticResource FieldStyle}"/>
+                            <TextBox Text="{Binding EditOrgDescription, UpdateSourceTrigger=PropertyChanged}"
+                                     Style="{StaticResource FieldStyle}"
+                                     AcceptsReturn="True"
+                                     TextWrapping="Wrap"
+                                     MinHeight="52"/>
+                            <CheckBox Content="Public organization"
+                                      IsChecked="{Binding EditOrgIsPublic}"
+                                      Foreground="{DynamicResource TextBodyBrush}"
+                                      FontSize="12"
+                                      Margin="0,0,0,8"/>
+                            <StackPanel Orientation="Horizontal">
+                                <Button Content="Save changes"
+                                        Command="{Binding SaveOrganizationCommand}"
+                                        Style="{StaticResource PrimaryBtnStyle}"
+                                        Margin="0,0,8,0"/>
+                                <Button Content="Cancel"
+                                        Command="{Binding CancelEditOrganizationCommand}"
+                                        Style="{StaticResource SmallBtnStyle}"/>
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- Members -->
+                        <TextBlock Text="MEMBERS"
+                                   FontSize="10" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextMutedBrush}"
+                                   Margin="0,20,0,8"/>
+                        <ItemsControl ItemsSource="{Binding Members}"
+                                      ItemTemplate="{StaticResource MemberItemTemplate}"/>
+                        <TextBlock Text="No members to show."
+                                   FontSize="11"
+                                   Foreground="{DynamicResource TextMutedBrush}"
+                                   Style="{StaticResource NoMembersHintStyle}"/>
+
+                        <!-- Add member (owner/admin only) -->
+                        <StackPanel Margin="0,16,0,0"
+                                    Style="{StaticResource ManageOnlyStyle}">
+                            <TextBlock Text="ADD MEMBER"
+                                       FontSize="10" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextMutedBrush}"
+                                       Margin="0,0,0,8"/>
+                            <DockPanel Margin="0,0,0,8">
+                                <Button DockPanel.Dock="Right"
+                                        Content="Search"
+                                        Command="{Binding SearchUsersCommand}"
+                                        Style="{StaticResource PrimaryBtnStyle}"
+                                        Margin="8,0,0,0"/>
+                                <TextBox Text="{Binding MemberSearchQuery, UpdateSourceTrigger=PropertyChanged}"
+                                         Style="{StaticResource FieldStyle}"
+                                         Margin="0"
+                                         VerticalContentAlignment="Center"/>
+                            </DockPanel>
+                            <ItemsControl ItemsSource="{Binding UserSearchResults}"
+                                          ItemTemplate="{StaticResource UserResultTemplate}"/>
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <TextBlock Text="Select an organization to see its details."
+                           FontSize="13"
+                           Foreground="{DynamicResource TextMutedBrush}"
+                           Margin="20,16"
+                           Style="{StaticResource NoSelectionHintStyle}"/>
+            </Grid>
+        </Grid>
+    </Grid>
+</UserControl>
