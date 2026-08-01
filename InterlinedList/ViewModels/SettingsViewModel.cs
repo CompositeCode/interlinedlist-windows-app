@@ -44,6 +44,10 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     private string newEmail = "";
 
+    // Account deletion requires typing your exact username as a guard.
+    [ObservableProperty]
+    private string deleteConfirmUsername = "";
+
     public SettingsViewModel(SessionService session)
     {
         _session = session;
@@ -233,6 +237,35 @@ public partial class SettingsViewModel : ObservableObject
 
     [RelayCommand]
     private Task ExportFollowsAsync() => ExportCsvAsync(_session.Api.ExportFollowsCsvAsync, "follows.csv");
+
+    // Destructive. Enabled only when the typed username matches exactly. On
+    // success the token is cleared and the shell returns to the login screen.
+    private bool CanDeleteAccount() =>
+        _session.CurrentUser is { } u &&
+        string.Equals(DeleteConfirmUsername.Trim(), u.Username, StringComparison.Ordinal);
+
+    [RelayCommand(CanExecute = nameof(CanDeleteAccount))]
+    private async Task DeleteAccountAsync()
+    {
+        if (_session.CurrentUser is not { } user) return;
+        IsBusy = true;
+        try
+        {
+            await _session.Api.DeleteAccountAsync(user.Username, user.Email);
+            _session.Logout();
+            Navigator.RequestLogout();
+        }
+        catch (InterlinedApiException ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    partial void OnDeleteConfirmUsernameChanged(string value) => DeleteAccountCommand.NotifyCanExecuteChanged();
 
     private async Task ExportCsvAsync(Func<CancellationToken, Task<string>> fetch, string defaultFileName)
     {

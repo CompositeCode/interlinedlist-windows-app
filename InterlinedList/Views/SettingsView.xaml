@@ -563,6 +563,33 @@
                     </StackPanel>
                 </Border>
 
+                <!-- ============ Danger zone ============ -->
+                <Border Background="{DynamicResource SurfaceBrush}"
+                        BorderBrush="#66E81123"
+                        BorderThickness="1"
+                        CornerRadius="4"
+                        Padding="16"
+                        Margin="0,0,0,16">
+                    <StackPanel>
+                        <TextBlock Text="Danger zone" Style="{StaticResource SectionTitleStyle}"/>
+                        <TextBlock Text="Delete your account permanently. This cannot be undone. Type your username to confirm."
+                                   Style="{StaticResource SubtleTextStyle}"
+                                   Margin="0,4,0,12"/>
+                        <TextBox Text="{Binding DeleteConfirmUsername, UpdateSourceTrigger=PropertyChanged}"
+                                 Style="{StaticResource FieldStyle}" Margin="0,0,0,10"/>
+                        <Button Content="Delete my account"
+                                Command="{Binding DeleteAccountCommand}"
+                                HorizontalAlignment="Left">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource DigBtnStyle}">
+                                    <Setter Property="BorderBrush" Value="#FFE81123"/>
+                                    <Setter Property="Foreground" Value="#FFE81123"/>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                    </StackPanel>
+                </Border>
+
             </StackPanel>
         </ScrollViewer>
     </Grid>

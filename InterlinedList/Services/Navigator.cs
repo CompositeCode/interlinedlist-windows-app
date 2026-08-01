@@ -10,9 +10,14 @@ public static class Navigator
 {
     public static Action<string>? OnOpenProfile { get; set; }
 
+    /// <summary>Set by the shell; lets a center view (e.g. account deletion) return the app to the login screen.</summary>
+    public static Action? OnLoggedOut { get; set; }
+
     public static void OpenProfile(string username)
     {
         if (!string.IsNullOrWhiteSpace(username))
             OnOpenProfile?.Invoke(username);
     }
+
+    public static void RequestLogout() => OnLoggedOut?.Invoke();
 }

@@ -187,6 +187,43 @@ per-list schema/columns, a full standalone notifications view.
 
 ---
 
+## Progress — Session 7 (2026-08-01) — account deletion + parity assessment
+
+- ✅ **Account deletion** — a guarded "Danger zone" in Settings (type your exact
+  username to enable), calling `POST /api/user/delete {username,email}`, then
+  clearing the token and returning the shell to the login screen (via a new
+  `Navigator.OnLoggedOut` hook). Builds clean Debug + Release.
+
+### ✅ Effective feature parity reached
+Every core, verifiable, user-facing product surface is now built (feed +
+media + replies + scheduling, DMs with media/polling, People + full follow
+graph + moderation, Settings incl. sessions/exports/account, Lists + rows +
+folders + sharing + watchers, Documents + folders + sharing + collaborators,
+Organizations + members, Search, Connected Accounts, auth self-service).
+
+**The only remaining gaps are genuinely blocked, not merely unbuilt:**
+- **Materialize** ("Create from…") — the API request is a single opaque
+  `source` string with no documented structure; can't be built reliably without
+  more API detail. *API-blocked.*
+- **Per-list schema/columns DSL** (`PUT /api/lists/{id}/schema`) — only partially
+  reverse-engineered; schema-less rows are the confirmed-working path (see
+  CLAUDE.md). *API-blocked.*
+- **GitHub issue sync** — the test account has no GitHub linked (every
+  `/api/github/*` call returns "GitHub account not linked") and the wire shapes
+  aren't documented, so it can't be verified. *Verification-blocked* — build it
+  once an account with GitHub linked is available.
+- **DM inbox-folder view** — `GET /api/dm` item shape can't be learned without
+  sending real DMs to a real person; DMs already work via the recipients list.
+  *Low value / verification-blocked.*
+- **Billing UI** — Stripe endpoints are cookie-session-only; handled by the
+  "Manage account on the web" handoff. *Auth-model-blocked (by design.)*
+
+To close the verification-blocked items, provision **(a)** a second test account
+(two-sided DM/follow/moderation/sharing checks) and **(b)** GitHub linked on a
+test account. Everything else is either shipped or API-limited.
+
+---
+
 ## 1. Parity snapshot by domain
 
 | Domain (product's name) | Web/API has | App has today | Status |
