@@ -237,6 +237,13 @@ three real, non-obvious issues surfaced and are fixed in the current state
    installed on the runner (see above) — it drifts as GitHub updates runner
    images, so a future image update could reintroduce this failure.
 
+**Releases** — `.github/workflows/release.yml` triggers on a pushed `v*` tag
+(e.g. `git tag v1.0.0 && git push origin v1.0.0`). It runs the same
+publish → WiX MSI build as CI, then attaches `InterlinedList-Setup.msi` to a
+GitHub Release for that tag (auto-generated notes). Keep the tag version in
+sync with `installer/Package.wxs` `Version` and `Package.appxmanifest`
+`Version` (both `1.0.0.0` today) — bump all three together for a new release.
+
 ## Windows-specific rules
 
 - App icon: `brand-kit/icons/windows/InterlinedList.ico` (set via ApplicationIcon in .csproj)
