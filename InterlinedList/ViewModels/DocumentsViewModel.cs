@@ -17,6 +17,15 @@ public partial class DocumentsViewModel : ObservableObject
     // Public share links for the currently-open document (empty when none open).
     public ObservableCollection<ShareLink> ShareLinks { get; } = new();
 
+    // Collaborators granted shared access to the currently-open document (empty when none open).
+    public ObservableCollection<Collaborator> Collaborators { get; } = new();
+
+    // Results of the collaborator user search (empty until a search runs).
+    public ObservableCollection<UserSearchResult> CollaboratorSearchResults { get; } = new();
+
+    [ObservableProperty]
+    private string collaboratorSearchQuery = "";
+
     [ObservableProperty]
     private bool isLoading;
 
@@ -120,7 +129,10 @@ public partial class DocumentsViewModel : ObservableObject
         SelectedDocument = doc;
         EditTitle = doc.Title;
         EditContent = doc.Content;
+        CollaboratorSearchQuery = "";
+        CollaboratorSearchResults.Clear();
         await ReloadShareLinksAsync(doc.Id);
+        await ReloadCollaboratorsAsync(doc.Id);
     }
 
     // Refresh ShareLinks from the server for the given document (read-after-write).
@@ -132,6 +144,22 @@ public partial class DocumentsViewModel : ObservableObject
             ShareLinks.Clear();
             foreach (var link in links)
                 ShareLinks.Add(link);
+        }
+        catch (InterlinedApiException ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+    }
+
+    // Refresh Collaborators from the server for the given document (read-after-write).
+    private async Task ReloadCollaboratorsAsync(string documentId)
+    {
+        try
+        {
+            var collaborators = await _session.Api.GetDocumentCollaboratorsAsync(documentId);
+            Collaborators.Clear();
+            foreach (var collaborator in collaborators)
+                Collaborators.Add(collaborator);
         }
         catch (InterlinedApiException ex)
         {
@@ -190,6 +218,63 @@ public partial class DocumentsViewModel : ObservableObject
         }
     }
 
+    // ── Collaborator management ───────────────────────────────────
+
+    [RelayCommand]
+    private async Task SearchCollaboratorUsersAsync()
+    {
+        if (SelectedDocument is not { } doc) return;
+
+        try
+        {
+            var results = await _session.Api.SearchCollaboratorUsersAsync(doc.Id, CollaboratorSearchQuery);
+            CollaboratorSearchResults.Clear();
+            foreach (var result in results)
+                CollaboratorSearchResults.Add(result);
+            ErrorMessage = null;
+        }
+        catch (InterlinedApiException ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+    }
+
+    [RelayCommand]
+    private async Task AddCollaboratorAsync(UserSearchResult user)
+    {
+        if (SelectedDocument is not { } doc) return;
+
+        try
+        {
+            await _session.Api.AddDocumentCollaboratorAsync(doc.Id, user.Id);
+            CollaboratorSearchQuery = "";
+            CollaboratorSearchResults.Clear();
+            ErrorMessage = null;
+            await ReloadCollaboratorsAsync(doc.Id);
+        }
+        catch (InterlinedApiException ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+    }
+
+    [RelayCommand]
+    private async Task RemoveCollaboratorAsync(Collaborator collaborator)
+    {
+        if (SelectedDocument is not { } doc) return;
+
+        try
+        {
+            await _session.Api.RemoveDocumentCollaboratorAsync(doc.Id, collaborator.UserId);
+            ErrorMessage = null;
+            await ReloadCollaboratorsAsync(doc.Id);
+        }
+        catch (InterlinedApiException ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+    }
+
     private bool CanSaveDocument() => SelectedDocument is not null;
 
     [RelayCommand(CanExecute = nameof(CanSaveDocument))]
@@ -221,6 +306,9 @@ public partial class DocumentsViewModel : ObservableObject
                 EditTitle = "";
                 EditContent = "";
                 ShareLinks.Clear();
+                Collaborators.Clear();
+                CollaboratorSearchResults.Clear();
+                CollaboratorSearchQuery = "";
             }
             ErrorMessage = null;
             await LoadAsync();

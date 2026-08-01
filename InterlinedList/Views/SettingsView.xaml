@@ -271,13 +271,20 @@
                         <TextBlock Text="New email address"
                                    Style="{StaticResource FieldLabelStyle}"
                                    Margin="0,0,0,4"/>
-                        <DockPanel>
+                        <DockPanel Margin="0,0,0,12">
                             <Button DockPanel.Dock="Right" Content="Request change"
                                     Command="{Binding ChangeEmailCommand}"
                                     Style="{StaticResource PrimaryBtnStyle}" Margin="8,0,0,0"/>
                             <TextBox Text="{Binding NewEmail, UpdateSourceTrigger=PropertyChanged}"
                                      Style="{StaticResource FieldStyle}"/>
                         </DockPanel>
+
+                        <TextBlock Text="Subscription &amp; billing are managed on the web."
+                                   Style="{StaticResource SubtleTextStyle}" Margin="0,0,0,6"/>
+                        <Button Content="Manage account on the web"
+                                Command="{Binding OpenWebAccountCommand}"
+                                Style="{StaticResource DigBtnStyle}"
+                                HorizontalAlignment="Left"/>
                     </StackPanel>
                 </Border>
 

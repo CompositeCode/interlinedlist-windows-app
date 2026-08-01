@@ -162,6 +162,31 @@ mutual-follows display, per-list schema/columns.
 
 ---
 
+## Progress — Session 6 (2026-08-01) — collaboration + profile depth
+
+Live-verified watcher/collaborator shapes (`POST {userId,role}`→201, `GET`→
+`{watchers|collaborators:[{id,userId,role,createdAt,user}]}`, `DELETE …/{userId}`,
+plus `/users?q=` search — added + removed real test edges). Builds clean
+Debug + Release.
+
+**Shipped this session:**
+- ✅ **List watchers** — invite users to a list you own (via search), list, remove.
+- ✅ **Document collaborators** — same for documents.
+- ✅ **Mutual connections** on a profile (People) — chips that open that user.
+- ✅ **Manage account on the web** handoff (Settings) — billing/subscription is
+  cookie-only server-side, so we hand off to the site (like OAuth linking).
+- Services: list watcher + doc collaborator CRUD + user-search, `Collaborator`
+  model, `GetMutualAsync` surfaced.
+
+**Materialize** stays deferred — its request is a single opaque `source` string;
+not enough to build reliably without more API detail.
+
+**Remaining post-v1:** Materialize, GitHub (needs GitHub linked on the account),
+account-deletion UI (destructive — intentionally deferred), DM inbox-folder view,
+per-list schema/columns, a full standalone notifications view.
+
+---
+
 ## 1. Parity snapshot by domain
 
 | Domain (product's name) | Web/API has | App has today | Status |

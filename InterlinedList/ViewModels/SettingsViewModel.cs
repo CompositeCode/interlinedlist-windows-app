@@ -65,6 +65,16 @@ public partial class SettingsViewModel : ObservableObject
         }
     }
 
+    // Billing/subscription is cookie-session-only server-side, so the native app
+    // hands off to the website (same pattern as OAuth linking).
+    [RelayCommand]
+    private void OpenWebAccount()
+        => System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = ApiConfig.BaseUrl,
+            UseShellExecute = true
+        });
+
     [RelayCommand]
     private async Task ChangeEmailAsync()
     {

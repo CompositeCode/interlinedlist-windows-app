@@ -17,6 +17,7 @@ public partial class ProfileViewModel : ObservableObject
 
     public ObservableCollection<FollowUser> FollowRequests { get; } = new();
     public ObservableCollection<MessageItemViewModel> Messages { get; } = new();
+    public ObservableCollection<FollowUser> Mutuals { get; } = new();
 
     [ObservableProperty]
     private string lookupUsername = "";
@@ -47,6 +48,8 @@ public partial class ProfileViewModel : ObservableObject
 
     public bool HasProfile => Profile is not null;
 
+    public bool HasMutuals => Mutuals.Count > 0;
+
     public string FollowButtonText =>
         Relationship?.IsFollowing == true ? "Following"
         : Relationship?.IsPending == true ? "Requested"
@@ -60,6 +63,7 @@ public partial class ProfileViewModel : ObservableObject
     {
         _session = session;
         FollowRequests.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasRequests));
+        Mutuals.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasMutuals));
     }
 
     [RelayCommand]
@@ -107,6 +111,10 @@ public partial class ProfileViewModel : ObservableObject
             Messages.Clear();
             foreach (var message in page.Messages)
                 Messages.Add(new MessageItemViewModel(message, _session.Api, _session.CurrentUser?.Id));
+
+            Mutuals.Clear();
+            foreach (var mutual in await _session.Api.GetMutualAsync(profile.Id))
+                Mutuals.Add(mutual);
 
             ErrorMessage = null;
         }
@@ -193,6 +201,13 @@ public partial class ProfileViewModel : ObservableObject
         {
             ErrorMessage = ex.Message;
         }
+    }
+
+    [RelayCommand]
+    private async Task OpenUserAsync(FollowUser user)
+    {
+        LookupUsername = user.Username;
+        await LoadProfileAsync();
     }
 
     [RelayCommand]
