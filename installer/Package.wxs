@@ -45,9 +45,25 @@
       <Files Include="$(var.PublishDir)\**" />
     </ComponentGroup>
 
+    <!-- Register a Windows Event Log source under "Application" so the app can
+         write to Event Viewer for debugging. Creating a source requires elevation
+         (the MSI is perMachine/elevated); the app runs asInvoker and can only
+         write to a source that already exists. The registry key is component-owned,
+         so it's removed on uninstall. -->
+    <Component Id="EventLogSource" Directory="INSTALLFOLDER" Guid="7C4B2E1A-9F3D-4A6B-8E2C-1D5F0A9B3C77">
+      <RegistryValue Root="HKLM"
+                     Key="SYSTEM\CurrentControlSet\Services\EventLog\Application\InterlinedList"
+                     Name="EventMessageFile" Type="expandable"
+                     Value="%SystemRoot%\System32\EventCreate.exe" KeyPath="yes" />
+      <RegistryValue Root="HKLM"
+                     Key="SYSTEM\CurrentControlSet\Services\EventLog\Application\InterlinedList"
+                     Name="TypesSupported" Type="integer" Value="7" />
+    </Component>
+
     <Feature Id="MainFeature" Title="InterlinedList" Level="1">
       <ComponentGroupRef Id="AppFiles" />
       <ComponentRef Id="ApplicationShortcut" />
+      <ComponentRef Id="EventLogSource" />
     </Feature>
 
     <ui:WixUI Id="WixUI_Minimal" />

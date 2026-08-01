@@ -20,6 +20,9 @@
 
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
+    <!-- Best-effort Windows Event Log sink for AppLog. Not part of the WindowsDesktop
+         shared framework, so it must be referenced explicitly. -->
+    <PackageReference Include="System.Diagnostics.EventLog" Version="10.0.10" />
   </ItemGroup>
 
 </Project>
