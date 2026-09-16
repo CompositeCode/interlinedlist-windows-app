@@ -64,9 +64,35 @@ public partial class ListsViewModel : ObservableObject
 
     private static readonly JsonSerializerOptions RowEditJsonOptions = new() { WriteIndented = true };
 
+    /// <summary>
+    /// The column form builder (#18). Hosted here rather than owned by the view
+    /// so the create-list form can hand its draft straight to
+    /// <c>POST /api/lists</c> as a <c>schema</c>, which is the only way to give a
+    /// brand-new list columns without an immediately-destructive second call.
+    /// </summary>
+    public ListColumnEditorViewModel ColumnEditor { get; }
+
     public ListsViewModel(SessionService session)
     {
         _session = session;
+        ColumnEditor = new ListColumnEditorViewModel(session);
+        ColumnEditor.Saved += OnColumnsSaved;
+    }
+
+    /// <summary>
+    /// A column save can rename the list (only on the destructive rebuild, but
+    /// the editor owns that decision), so re-read the browser afterwards.
+    /// </summary>
+    private void OnColumnsSaved(object? sender, EventArgs e)
+    {
+        if (ColumnEditor.IsNewListMode) return;
+        _ = LoadListsAsync();
+    }
+
+    [RelayCommand]
+    private async Task OpenColumnEditorAsync(ListSummary list)
+    {
+        await ColumnEditor.OpenForListAsync(list);
     }
 
     [RelayCommand]
@@ -98,13 +124,34 @@ public partial class ListsViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanCreateList))]
     private async Task CreateListAsync()
     {
+        var title = NewListTitle.Trim();
+        var description = string.IsNullOrWhiteSpace(NewListDescription) ? null : NewListDescription.Trim();
+
+        // A draft in the column builder rides along as POST /api/lists' `schema`
+        // (live-verified: the same DSL validation as the rebuild PUT, and the
+        // list comes back with its columns already created).
+        ListSchema? schema = null;
+        if (ColumnEditor is { IsNewListMode: true, Columns.Count: > 0 })
+        {
+            if (!ColumnEditor.ValidateDraft())
+            {
+                ErrorMessage = "Fix the new list's columns before creating it.";
+                return;
+            }
+            schema = ColumnEditor.BuildSchema(title, description);
+        }
+
         try
         {
-            var description = string.IsNullOrWhiteSpace(NewListDescription) ? null : NewListDescription.Trim();
-            await _session.Api.CreateListAsync(NewListTitle.Trim(), description);
+            await _session.Api.CreateListAsync(title, description, schema);
             NewListTitle = "";
             NewListDescription = "";
+            if (schema is not null) ColumnEditor.CloseCommand.Execute(null);
             await LoadListsAsync();
+        }
+        catch (ListSchemaException ex)
+        {
+            ErrorMessage = ex.Message;
         }
         catch (InterlinedApiException ex)
         {
