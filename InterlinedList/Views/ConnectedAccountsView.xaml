@@ -114,6 +114,8 @@
                        Margin="0,0,0,8"
                        Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibility}}"/>
 
+            <local:GitHubConnectionPanel ReloadSignal="{Binding Identities.Count}"/>
+
             <!-- Linked accounts -->
             <ItemsControl ItemsSource="{Binding Identities}" Margin="0,0,0,16">
                 <ItemsControl.ItemTemplate>
