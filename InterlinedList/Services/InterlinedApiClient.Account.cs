@@ -43,12 +43,47 @@ public sealed partial class InterlinedApiClient
             : new();
     }
 
-    // channels is sent as an object { push, inApp }; the GET returns it that way,
-    // though the OpenAPI request schema loosely types it as string — verify a
-    // real PATCH round-trips before treating this as fully proven.
-    public Task SetNotificationPreferenceAsync(string key, bool push, bool inApp, CancellationToken ct = default)
-        => SendVoidAsync(HttpMethod.Patch, "api/user/notification-preferences",
-            new { key, channels = new { push, inApp } }, ct);
+    /// <summary>
+    /// Toggle ONE channel on one notification event.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Verified live 2026-09-16. Two properties of this endpoint matter:
+    /// </para>
+    /// <list type="number">
+    /// <item><description>
+    /// It <b>rejects a channel the event does not support</b> —
+    /// <c>PATCH {"key":"follow","channels":{"push":true,"inApp":true}}</c> returns
+    /// <c>400 "Channel 'inApp' is not supported for event 'follow'"</c>. So a
+    /// caller must send only channels the event actually declares.
+    /// </description></item>
+    /// <item><description>
+    /// It <b>merges</b> rather than replaces: sending one channel leaves the
+    /// others untouched. That makes per-channel PATCH the correct granularity,
+    /// and it means we never risk clearing a channel we didn't render.
+    /// </description></item>
+    /// </list>
+    /// <para>
+    /// The response echoes the full updated event, so no read-after-write is
+    /// needed here.
+    /// </para>
+    /// </remarks>
+    public async Task<NotificationPreference?> SetNotificationChannelAsync(
+        string key, string channel, bool enabled, CancellationToken ct = default)
+    {
+        var json = await SendJsonAsync<JsonElement>(
+            HttpMethod.Patch, "api/user/notification-preferences",
+            new Dictionary<string, object>
+            {
+                ["key"] = key,
+                // One channel only — see the remarks.
+                ["channels"] = new Dictionary<string, bool> { [channel] = enabled },
+            }, ct);
+
+        return json.ValueKind == JsonValueKind.Object
+            ? json.Deserialize<NotificationPreference>(JsonOptions)
+            : null;
+    }
 
     // ── Avatar / email / account lifecycle ──────────────────────────────────────
     // Request shapes verified against the OpenAPI spec 2026-07-31: avatar {url},
