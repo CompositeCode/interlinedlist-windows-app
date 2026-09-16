@@ -38,6 +38,14 @@ public partial class LoginWindow : Window
 
     private async Task SubmitAsync()
     {
+        // Verification is the odd one out: succeeding doesn't produce a session
+        // (the endpoint is unauthenticated), so it must not raise LoginSucceeded.
+        if (_viewModel.Mode == LoginMode.VerifyEmail)
+        {
+            await _viewModel.VerifyEmailAsync();
+            return;
+        }
+
         var succeeded = _viewModel.Mode switch
         {
             LoginMode.Register => await _viewModel.RegisterAsync(PasswordInput.Password),
@@ -67,6 +75,18 @@ public partial class LoginWindow : Window
     private void BtnHaveResetToken_Click(object sender, RoutedEventArgs e)
         => _viewModel.GoToResetPasswordMode();
 
+    private async void BtnVerifyEmail_Click(object sender, RoutedEventArgs e)
+        => await _viewModel.GoToVerifyEmailModeAsync();
+
+    private async void BtnConfirmEmailChange_Click(object sender, RoutedEventArgs e)
+        => await _viewModel.ConfirmEmailChangeAsync();
+
+    private async void BtnUndoEmailChange_Click(object sender, RoutedEventArgs e)
+        => await _viewModel.UndoEmailChangeAsync();
+
+    private void BtnResendVerification_Click(object sender, RoutedEventArgs e)
+        => _viewModel.OpenWebVerificationSettings();
+
     private void BtnBackToLogin_Click(object sender, RoutedEventArgs e)
     {
         ClearResetInputs();
@@ -90,11 +110,16 @@ public partial class LoginWindow : Window
     /// </summary>
     private void ApplyMode()
     {
+        EmailFields.Visibility = Vis(_viewModel.ShowEmailField);
         RegisterFields.Visibility = Vis(_viewModel.ShowRegisterFields);
         ResetFields.Visibility = Vis(_viewModel.ShowResetFields);
+        VerifyFields.Visibility = Vis(_viewModel.ShowVerifyFields);
         PasswordFields.Visibility = Vis(_viewModel.ShowPasswordField);
+        EmailChangeActions.Visibility = Vis(_viewModel.ShowEmailChangeActions);
+        BtnResendVerification.Visibility = Vis(_viewModel.IsVerifyEmailMode);
         BtnForgot.Visibility = Vis(_viewModel.ShowForgotLink);
         BtnHaveResetToken.Visibility = Vis(_viewModel.ShowForgotLink);
+        BtnVerifyEmail.Visibility = Vis(_viewModel.ShowForgotLink);
         BtnToggleMode.Visibility = Vis(_viewModel.ShowToggleMode);
         BtnBackToLogin.Visibility = Vis(_viewModel.ShowBackToLogin);
         BtnLogin.Content = _viewModel.IsBusy ? "Working…" : _viewModel.PrimaryButtonText;
@@ -116,6 +141,12 @@ public partial class LoginWindow : Window
 
             case nameof(LoginViewModel.Mode):
                 ApplyMode();
+                break;
+
+            // Raised on its own when pendingEmail arrives from GET /api/user, not
+            // just on a mode change — that read is async and lands later.
+            case nameof(LoginViewModel.ShowEmailChangeActions):
+                EmailChangeActions.Visibility = Vis(_viewModel.ShowEmailChangeActions);
                 break;
 
             case nameof(LoginViewModel.IsBusy):
