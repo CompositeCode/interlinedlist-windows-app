@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         Title="InterlinedList — Log In"
-        Height="560" Width="420"
+        Height="660" Width="420"
         WindowStyle="None"
         ResizeMode="NoResize"
         WindowStartupLocation="CenterScreen"
@@ -74,7 +74,13 @@
         </Grid>
 
         <!-- ── Body: centered login card ────────────────────────────── -->
-        <Grid Grid.Row="1">
+        <!-- The card grows and shrinks with the mode (register adds two fields,
+             reset adds three), so it scrolls rather than clipping on a
+             fixed-size, non-resizable window. -->
+        <ScrollViewer Grid.Row="1"
+                      VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled"
+                      Padding="0,16">
             <Border Width="320"
                     VerticalAlignment="Center"
                     HorizontalAlignment="Center"
@@ -90,10 +96,12 @@
                            Margin="0,0,0,12"
                            HorizontalAlignment="Center"/>
 
-                    <TextBlock Text="Log in to InterlinedList"
+                    <TextBlock Text="{Binding HeadingText}"
                                FontSize="16" FontWeight="SemiBold"
                                Foreground="{DynamicResource TextBrush}"
                                HorizontalAlignment="Center"
+                               TextAlignment="Center"
+                               TextWrapping="Wrap"
                                Margin="0,0,0,20"/>
 
                     <TextBlock Text="EMAIL"
@@ -130,19 +138,74 @@
                                  Foreground="{DynamicResource TextBrush}"/>
                     </StackPanel>
 
-                    <TextBlock Text="PASSWORD"
-                               FontSize="10" FontWeight="SemiBold"
-                               Foreground="{DynamicResource TextMutedBrush}"
-                               Margin="0,0,0,4"/>
-                    <PasswordBox x:Name="PasswordInput"
-                                 FontSize="13"
-                                 Padding="8,6"
-                                 Margin="0,0,0,6"
+                    <!-- Reset-completion fields (toggled from code-behind).
+                         POST /api/auth/reset-password is unauthenticated, so this
+                         works before there is any session — which is the point. -->
+                    <StackPanel x:Name="ResetFields" Visibility="Collapsed">
+                        <TextBlock Text="RESET TOKEN FROM THE EMAIL"
+                                   FontSize="10" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,0,4"/>
+                        <TextBox Text="{Binding ResetToken, UpdateSourceTrigger=PropertyChanged}"
+                                 FontSize="12"
+                                 FontFamily="JetBrains Mono, Consolas"
+                                 Padding="8,6" Margin="0,0,0,4"
+                                 TextWrapping="Wrap"
+                                 AcceptsReturn="False"
                                  Background="{DynamicResource Surface2Brush}"
-                                 BorderBrush="{DynamicResource BorderBrush}"
-                                 BorderThickness="1"
-                                 Foreground="{DynamicResource TextBrush}"
-                                 KeyDown="PasswordInput_KeyDown"/>
+                                 BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                                 Foreground="{DynamicResource TextBrush}"/>
+                        <TextBlock Text="Paste the token or the whole link — either works."
+                                   FontSize="11"
+                                   Foreground="{DynamicResource TextMutedBrush}"
+                                   TextWrapping="Wrap"
+                                   Margin="0,0,0,14"/>
+
+                        <TextBlock Text="NEW PASSWORD"
+                                   FontSize="10" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,0,4"/>
+                        <PasswordBox x:Name="NewPasswordInput"
+                                     FontSize="13" Padding="8,6" Margin="0,0,0,14"
+                                     Background="{DynamicResource Surface2Brush}"
+                                     BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                                     Foreground="{DynamicResource TextBrush}"
+                                     KeyDown="PasswordInput_KeyDown"/>
+
+                        <TextBlock Text="CONFIRM NEW PASSWORD"
+                                   FontSize="10" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,0,4"/>
+                        <PasswordBox x:Name="ConfirmPasswordInput"
+                                     FontSize="13" Padding="8,6" Margin="0,0,0,6"
+                                     Background="{DynamicResource Surface2Brush}"
+                                     BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                                     Foreground="{DynamicResource TextBrush}"
+                                     KeyDown="PasswordInput_KeyDown"/>
+                    </StackPanel>
+
+                    <StackPanel x:Name="PasswordFields">
+                        <TextBlock Text="PASSWORD"
+                                   FontSize="10" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextMutedBrush}"
+                                   Margin="0,0,0,4"/>
+                        <PasswordBox x:Name="PasswordInput"
+                                     FontSize="13"
+                                     Padding="8,6"
+                                     Margin="0,0,0,6"
+                                     Background="{DynamicResource Surface2Brush}"
+                                     BorderBrush="{DynamicResource BorderBrush}"
+                                     BorderThickness="1"
+                                     Foreground="{DynamicResource TextBrush}"
+                                     KeyDown="PasswordInput_KeyDown"/>
+                    </StackPanel>
+
+                    <!-- Progress/success, kept visually distinct from failures so
+                         "a reset link is on its way" isn't rendered as an error. -->
+                    <TextBlock x:Name="StatusText"
+                               Text="{Binding StatusMessage}"
+                               FontSize="12"
+                               Foreground="{DynamicResource TextMutedBrush}"
+                               TextWrapping="Wrap"
+                               Visibility="Collapsed"
+                               Margin="0,4,0,4"/>
 
                     <TextBlock x:Name="ErrorText"
                                Text="{Binding ErrorMessage}"
@@ -165,15 +228,28 @@
                             Style="{StaticResource LinkBtnStyle}"
                             Margin="0,14,0,0"/>
 
+                    <Button x:Name="BtnHaveResetToken"
+                            Content="I already have a reset token"
+                            Click="BtnHaveResetToken_Click"
+                            Style="{StaticResource LinkBtnStyle}"
+                            Margin="0,10,0,0"/>
+
                     <Button x:Name="BtnToggleMode"
                             Content="{Binding ToggleModeText}"
                             Click="BtnToggleMode_Click"
                             Style="{StaticResource LinkBtnStyle}"
                             Margin="0,10,0,0"/>
 
+                    <Button x:Name="BtnBackToLogin"
+                            Content="Back to log in"
+                            Click="BtnBackToLogin_Click"
+                            Style="{StaticResource LinkBtnStyle}"
+                            Visibility="Collapsed"
+                            Margin="0,10,0,0"/>
+
                 </StackPanel>
             </Border>
-        </Grid>
+        </ScrollViewer>
     </Grid>
 
     <!-- ── Styles (local: not shared across windows) ────────────────── -->
