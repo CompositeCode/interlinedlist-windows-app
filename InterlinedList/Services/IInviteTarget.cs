@@ -57,8 +57,7 @@ public static class InviteTargets
         return kind switch
         {
             InviteTargetKind.List => new ListInviteTarget(api, resourceId),
-            // Document invites land with issue #56 (same endpoints under
-            // /api/documents) and slot in here.
+            InviteTargetKind.Document => new DocumentInviteTarget(api, resourceId),
             _ => null,
         };
     }
