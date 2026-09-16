@@ -14,6 +14,7 @@
         <BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
         <local:NullOrEmptyToVisibilityConverter x:Key="NullOrEmptyToVisibility"/>
         <local:InverseNullToVisibilityConverter x:Key="InverseNullToVisibility"/>
+        <local:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibility"/>
 
         <Style x:Key="FieldStyle" TargetType="TextBox">
             <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
@@ -216,6 +217,221 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <!-- Date box. The calendar popup keeps its platform look; the field
+             itself is painted from the theme so it isn't a white slab in dark mode. -->
+        <Style x:Key="FieldDateStyle" TargetType="DatePicker">
+            <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextBodyBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="MinWidth" Value="132"/>
+            <Setter Property="HorizontalAlignment" Value="Left"/>
+        </Style>
+
+        <!-- ── Row grid cells, rendered by column type (not as JSON) ────────── -->
+        <DataTemplate x:Key="CellTextTemplate">
+            <StackPanel Margin="0,0,16,6" MaxWidth="240">
+                <TextBlock Text="{Binding Label}" Style="{StaticResource CaptionStyle}"/>
+                <TextBlock Text="{Binding Text}"
+                           FontSize="12"
+                           Foreground="{DynamicResource TextBodyBrush}"
+                           TextWrapping="Wrap"/>
+            </StackPanel>
+        </DataTemplate>
+
+        <DataTemplate x:Key="CellBoolTemplate">
+            <StackPanel Margin="0,0,16,6">
+                <TextBlock Text="{Binding Label}" Style="{StaticResource CaptionStyle}"/>
+                <Grid>
+                    <CheckBox IsChecked="{Binding Flag, Mode=OneWay}"
+                              IsEnabled="False"
+                              Visibility="{Binding HasValue, Converter={StaticResource BoolToVisibility}}"/>
+                    <TextBlock Text="—"
+                               FontSize="12"
+                               Foreground="{DynamicResource TextMutedBrush}"
+                               Visibility="{Binding HasValue, Converter={StaticResource InverseBoolToVisibility}}"/>
+                </Grid>
+            </StackPanel>
+        </DataTemplate>
+
+        <DataTemplate x:Key="CellChipsTemplate">
+            <StackPanel Margin="0,0,16,6" MaxWidth="260">
+                <TextBlock Text="{Binding Label}" Style="{StaticResource CaptionStyle}"/>
+                <ItemsControl ItemsSource="{Binding Chips}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Background="{DynamicResource Surface3Brush}"
+                                    BorderBrush="{DynamicResource BorderBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="3"
+                                    Padding="6,1"
+                                    Margin="0,0,4,4">
+                                <TextBlock Text="{Binding}"
+                                           FontSize="11"
+                                           Foreground="{DynamicResource TextBodyBrush}"/>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <TextBlock Text="—"
+                           FontSize="12"
+                           Foreground="{DynamicResource TextMutedBrush}"
+                           Visibility="{Binding HasValue, Converter={StaticResource InverseBoolToVisibility}}"/>
+            </StackPanel>
+        </DataTemplate>
+
+        <Style x:Key="RowCellStyle" TargetType="ContentControl">
+            <Setter Property="ContentTemplate" Value="{StaticResource CellTextTemplate}"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Kind}" Value="Boolean">
+                    <Setter Property="ContentTemplate" Value="{StaticResource CellBoolTemplate}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Kind}" Value="Chips">
+                    <Setter Property="ContentTemplate" Value="{StaticResource CellChipsTemplate}"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- ── Typed row form: one control per column type ───────────────────── -->
+        <DataTemplate x:Key="FieldControlText">
+            <TextBox Text="{Binding TextValue, UpdateSourceTrigger=PropertyChanged}"
+                     Style="{StaticResource MicroFieldStyle}"/>
+        </DataTemplate>
+
+        <DataTemplate x:Key="FieldControlLongText">
+            <TextBox Text="{Binding TextValue, UpdateSourceTrigger=PropertyChanged}"
+                     Style="{StaticResource MicroFieldStyle}"
+                     AcceptsReturn="True"
+                     TextWrapping="Wrap"
+                     MinHeight="54" MaxHeight="140"
+                     VerticalScrollBarVisibility="Auto"/>
+        </DataTemplate>
+
+        <DataTemplate x:Key="FieldControlBoolean">
+            <ComboBox ItemsSource="{Binding BoolOptions}"
+                      SelectedItem="{Binding BoolSelection}"
+                      Style="{StaticResource FieldComboStyle}"
+                      MinHeight="26" Width="132"
+                      HorizontalAlignment="Left"/>
+        </DataTemplate>
+
+        <DataTemplate x:Key="FieldControlSelect">
+            <ComboBox ItemsSource="{Binding SelectOptions}"
+                      SelectedItem="{Binding SelectedOption}"
+                      Style="{StaticResource FieldComboStyle}"
+                      MinHeight="26" MinWidth="180"
+                      HorizontalAlignment="Left"/>
+        </DataTemplate>
+
+        <DataTemplate x:Key="FieldControlDate">
+            <DatePicker SelectedDate="{Binding DateValue}"
+                        Style="{StaticResource FieldDateStyle}"/>
+        </DataTemplate>
+
+        <DataTemplate x:Key="FieldControlDateTime">
+            <StackPanel Orientation="Horizontal">
+                <DatePicker SelectedDate="{Binding DateValue}"
+                            Style="{StaticResource FieldDateStyle}"/>
+                <TextBox Text="{Binding TimeValue, UpdateSourceTrigger=PropertyChanged}"
+                         Style="{StaticResource MicroFieldStyle}"
+                         Width="68"
+                         Margin="6,0,0,0"/>
+                <TextBlock Text="HH:MM"
+                           Style="{StaticResource CaptionStyle}"
+                           VerticalAlignment="Center"
+                           Margin="6,0,0,0"/>
+            </StackPanel>
+        </DataTemplate>
+
+        <DataTemplate x:Key="FieldControlMultiSelect">
+            <ItemsControl ItemsSource="{Binding MultiOptions}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel/>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <CheckBox Content="{Binding Value}"
+                                  IsChecked="{Binding IsSelected}"
+                                  Style="{StaticResource MicroCheckStyle}"/>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </DataTemplate>
+
+        <Style x:Key="RowFieldControlStyle" TargetType="ContentControl">
+            <Setter Property="ContentTemplate" Value="{StaticResource FieldControlText}"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Kind}" Value="LongText">
+                    <Setter Property="ContentTemplate" Value="{StaticResource FieldControlLongText}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Kind}" Value="Boolean">
+                    <Setter Property="ContentTemplate" Value="{StaticResource FieldControlBoolean}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Kind}" Value="Select">
+                    <Setter Property="ContentTemplate" Value="{StaticResource FieldControlSelect}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Kind}" Value="MultiSelect">
+                    <Setter Property="ContentTemplate" Value="{StaticResource FieldControlMultiSelect}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Kind}" Value="Date">
+                    <Setter Property="ContentTemplate" Value="{StaticResource FieldControlDate}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Kind}" Value="DateTime">
+                    <Setter Property="ContentTemplate" Value="{StaticResource FieldControlDateTime}"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <DataTemplate x:Key="RowFieldTemplate" DataType="{x:Type vm:ListRowFieldViewModel}">
+            <StackPanel Margin="0,0,0,10"
+                        Visibility="{Binding IsShown, Converter={StaticResource BoolToVisibility}}">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="{Binding Label}" Style="{StaticResource CaptionStyle}"/>
+                    <TextBlock Text=" *"
+                               Style="{StaticResource CaptionStyle}"
+                               Foreground="{DynamicResource AmberBrush}"
+                               Visibility="{Binding IsRequired, Converter={StaticResource BoolToVisibility}}"/>
+                    <TextBlock Text="{Binding TypeLabel, StringFormat=' · {0}'}" Style="{StaticResource CaptionStyle}"/>
+                    <TextBlock Text="{Binding Key, StringFormat=' · {0}'}"
+                               Style="{StaticResource CaptionStyle}"
+                               FontFamily="JetBrains Mono, Consolas"/>
+                    <TextBlock Text="{Binding StepHint, StringFormat=' · {0}'}"
+                               Style="{StaticResource CaptionStyle}"
+                               Visibility="{Binding StepHint, Converter={StaticResource NullOrEmptyToVisibility}}"/>
+                </StackPanel>
+
+                <ContentControl Content="{Binding}" Style="{StaticResource RowFieldControlStyle}"/>
+
+                <TextBlock Text="{Binding HelpText}"
+                           FontSize="10"
+                           Foreground="{DynamicResource TextMutedBrush}"
+                           TextWrapping="Wrap"
+                           Margin="0,2,0,0"
+                           Visibility="{Binding HelpText, Converter={StaticResource NullOrEmptyToVisibility}}"/>
+
+                <TextBlock Text="{Binding Placeholder, StringFormat='e.g. {0}'}"
+                           FontSize="10"
+                           Foreground="{DynamicResource TextMutedBrush}"
+                           TextWrapping="Wrap"
+                           Margin="0,2,0,0"
+                           Visibility="{Binding Placeholder, Converter={StaticResource NullOrEmptyToVisibility}}"/>
+
+                <TextBlock Text="{Binding ErrorMessage}"
+                           FontSize="11"
+                           Foreground="#FFE81123"
+                           TextWrapping="Wrap"
+                           Margin="0,2,0,0"
+                           Visibility="{Binding ErrorMessage, Converter={StaticResource NullOrEmptyToVisibility}}"/>
+            </StackPanel>
+        </DataTemplate>
     </UserControl.Resources>
 
     <Grid>
@@ -927,7 +1143,7 @@
 
                     <ItemsControl ItemsSource="{Binding Rows}">
                         <ItemsControl.ItemTemplate>
-                            <DataTemplate DataType="{x:Type models:ListDataRow}">
+                            <DataTemplate DataType="{x:Type vm:ListRowViewModel}">
                                 <Border Margin="0,0,0,6"
                                         Background="{DynamicResource Surface2Brush}"
                                         BorderBrush="{DynamicResource BorderBrush}"
@@ -958,15 +1174,99 @@
                                                     CommandParameter="{Binding}"
                                                     Style="{StaticResource RowActionBtnStyle}"/>
                                         </StackPanel>
-                                        <TextBlock Text="{Binding DisplaySummary}"
-                                                   FontSize="12"
-                                                   Foreground="{DynamicResource TextBodyBrush}"
-                                                   TextWrapping="Wrap"/>
+                                        <StackPanel>
+                                            <!-- Typed cells, one per visible column -->
+                                            <ItemsControl ItemsSource="{Binding Cells}"
+                                                          Visibility="{Binding HasSchema, Converter={StaticResource BoolToVisibility}}">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate>
+                                                        <WrapPanel/>
+                                                    </ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate DataType="{x:Type vm:ListRowCellViewModel}">
+                                                        <ContentControl Content="{Binding}" Style="{StaticResource RowCellStyle}"/>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+
+                                            <!-- Schema-less list: the freeform JSON preview it has always had -->
+                                            <TextBlock Text="{Binding RawSummary}"
+                                                       FontSize="12"
+                                                       Foreground="{DynamicResource TextBodyBrush}"
+                                                       TextWrapping="Wrap"
+                                                       Visibility="{Binding HasSchema, Converter={StaticResource InverseBoolToVisibility}}"/>
+
+                                            <!-- Values whose column is gone: still stored, so still shown -->
+                                            <TextBlock Text="{Binding OrphanSummary}"
+                                                       FontSize="10"
+                                                       Foreground="{DynamicResource TextMutedBrush}"
+                                                       TextWrapping="Wrap"
+                                                       Margin="0,2,0,0"
+                                                       Visibility="{Binding OrphanSummary, Converter={StaticResource NullOrEmptyToVisibility}}"/>
+                                        </StackPanel>
                                     </DockPanel>
                                 </Border>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
+
+                    <!-- ── Typed row form (#21) ───────────────────────────────────
+                         Generated from the list's live schema: one control per
+                         column, keyed by the column's KEY. Values the form doesn't
+                         touch are re-sent verbatim because a row write replaces
+                         rowData wholesale. -->
+                    <Border Margin="0,4,0,0"
+                            Background="{DynamicResource Surface2Brush}"
+                            BorderBrush="{DynamicResource BorderStrongBrush}"
+                            BorderThickness="1" CornerRadius="4" Padding="12,10"
+                            Visibility="{Binding RowEditor.IsOpen, Converter={StaticResource BoolToVisibility}}">
+                        <StackPanel>
+                            <DockPanel Margin="0,0,0,8">
+                                <Button DockPanel.Dock="Right"
+                                        Content="Close"
+                                        Command="{Binding RowEditor.CancelCommand}"
+                                        Style="{StaticResource RowActionBtnStyle}"/>
+                                <TextBlock Text="{Binding RowEditor.HeaderText}"
+                                           FontSize="13" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextBrush}"
+                                           VerticalAlignment="Center"/>
+                            </DockPanel>
+
+                            <ItemsControl ItemsSource="{Binding RowEditor.Fields}"
+                                          ItemTemplate="{StaticResource RowFieldTemplate}"/>
+
+                            <CheckBox Content="Show columns saved as hidden"
+                                      IsChecked="{Binding RowEditor.ShowHiddenColumns}"
+                                      Style="{StaticResource MicroCheckStyle}"
+                                      Margin="0,0,0,4"
+                                      Visibility="{Binding RowEditor.HasHiddenColumns, Converter={StaticResource BoolToVisibility}}"/>
+
+                            <TextBlock Text="{Binding RowEditor.OrphanNote}"
+                                       FontSize="11"
+                                       Foreground="{DynamicResource AmberBrush}"
+                                       TextWrapping="Wrap"
+                                       Margin="0,2,0,0"
+                                       Visibility="{Binding RowEditor.OrphanNote, Converter={StaticResource NullOrEmptyToVisibility}}"/>
+
+                            <TextBlock Text="{Binding RowEditor.ErrorMessage}"
+                                       FontSize="11"
+                                       Foreground="#FFE81123"
+                                       TextWrapping="Wrap"
+                                       Margin="0,4,0,0"
+                                       Visibility="{Binding RowEditor.ErrorMessage, Converter={StaticResource NullOrEmptyToVisibility}}"/>
+
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
+                                <Button Content="Cancel"
+                                        Command="{Binding RowEditor.CancelCommand}"
+                                        Style="{StaticResource RowActionBtnStyle}"
+                                        Margin="0,0,6,0"/>
+                                <Button Content="{Binding RowEditor.SaveButtonText}"
+                                        Command="{Binding RowEditor.SaveCommand}"
+                                        Style="{StaticResource PrimaryBtnStyle}"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
 
                     <!-- Inline row editor -->
                     <Border Margin="0,4,0,0"
@@ -1010,26 +1310,53 @@
                     </Style>
                 </Border.Style>
                 <StackPanel>
-                    <TextBlock Text="Paste a JSON object, e.g. {&quot;name&quot;: &quot;Widget&quot;, &quot;price&quot;: 9.99}"
-                               FontSize="11"
-                               Foreground="{DynamicResource TextMutedBrush}"
-                               Margin="0,0,0,4"/>
-                    <TextBox Text="{Binding NewRowJson, UpdateSourceTrigger=PropertyChanged}"
-                             Style="{StaticResource FieldStyle}"
-                             AcceptsReturn="True"
-                             TextWrapping="Wrap"
-                             FontFamily="JetBrains Mono, Consolas"
-                             MinHeight="60" MaxHeight="140"/>
+                    <DockPanel Margin="0,0,0,6">
+                        <!-- The hatch: a schema-less list has only this, and a
+                             schema'd one can still drop into it. -->
+                        <CheckBox DockPanel.Dock="Right"
+                                  Content="Edit rows as raw JSON"
+                                  IsChecked="{Binding UseRawJsonRowEditor}"
+                                  Style="{StaticResource MicroCheckStyle}"
+                                  Margin="8,0,0,0"
+                                  Visibility="{Binding HasSchema, Converter={StaticResource BoolToVisibility}}"/>
+                        <TextBlock Text="{Binding RowEditorModeNote}"
+                                   FontSize="11"
+                                   Foreground="{DynamicResource TextMutedBrush}"
+                                   TextWrapping="Wrap"
+                                   VerticalAlignment="Center"/>
+                    </DockPanel>
+
+                    <!-- Typed path: the form opens above, in the rows pane -->
+                    <Button Content="New row"
+                            Command="{Binding StartAddRowCommand}"
+                            HorizontalAlignment="Left"
+                            Style="{StaticResource PrimaryBtnStyle}"
+                            Visibility="{Binding ShowTypedRowEditor, Converter={StaticResource BoolToVisibility}}"/>
+
+                    <!-- Raw-JSON path -->
+                    <StackPanel Visibility="{Binding ShowRawJsonRowEditor, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock Text="Paste a JSON object, e.g. {&quot;name&quot;: &quot;Widget&quot;, &quot;price&quot;: 9.99}"
+                                   FontSize="11"
+                                   Foreground="{DynamicResource TextMutedBrush}"
+                                   Margin="0,0,0,4"/>
+                        <TextBox Text="{Binding NewRowJson, UpdateSourceTrigger=PropertyChanged}"
+                                 Style="{StaticResource FieldStyle}"
+                                 AcceptsReturn="True"
+                                 TextWrapping="Wrap"
+                                 FontFamily="JetBrains Mono, Consolas"
+                                 MinHeight="60" MaxHeight="140"/>
+                        <Button Content="Add row"
+                                Command="{Binding AddRowCommand}"
+                                HorizontalAlignment="Left"
+                                Style="{StaticResource PrimaryBtnStyle}"/>
+                    </StackPanel>
+
                     <TextBlock Text="{Binding RowErrorMessage}"
                                Foreground="#FFE81123"
                                FontSize="11"
                                TextWrapping="Wrap"
-                               Margin="0,0,0,8"
+                               Margin="0,8,0,0"
                                Visibility="{Binding RowErrorMessage, Converter={StaticResource NullOrEmptyToVisibility}}"/>
-                    <Button Content="Add row"
-                            Command="{Binding AddRowCommand}"
-                            HorizontalAlignment="Left"
-                            Style="{StaticResource PrimaryBtnStyle}"/>
                 </StackPanel>
             </Border>
         </Grid>
