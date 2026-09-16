@@ -1,0 +1,32 @@
+<UserControl x:Class="InterlinedList.Views.GitHubListBadge"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:InterlinedList.Views"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d"
+             HorizontalAlignment="Left"
+             Visibility="Collapsed">
+
+    <!-- Shown only once the index confirms this list is GitHub-backed; the whole
+         control stays collapsed otherwise, so a local list costs nothing and an
+         unknown list is never mislabelled. -->
+    <Border Background="{DynamicResource Surface3Brush}"
+            BorderBrush="{DynamicResource BorderBrush}"
+            BorderThickness="1"
+            CornerRadius="3"
+            Padding="5,1"
+            ToolTip="{Binding BadgeTooltip, RelativeSource={RelativeSource AncestorType=UserControl}}">
+        <StackPanel Orientation="Horizontal">
+            <local:GitHubMark Width="11" Height="11"
+                              VerticalAlignment="Center"
+                              Margin="0,0,4,0"
+                              Foreground="{DynamicResource TextBodyBrush}"/>
+            <TextBlock Text="GitHub"
+                       FontSize="10"
+                       FontFamily="JetBrains Mono, Consolas"
+                       Foreground="{DynamicResource TextBodyBrush}"
+                       VerticalAlignment="Center"/>
+        </StackPanel>
+    </Border>
+</UserControl>
