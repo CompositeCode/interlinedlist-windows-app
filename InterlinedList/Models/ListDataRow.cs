@@ -35,10 +35,27 @@ public sealed class ListDataRow
     public required Dictionary<string, JsonElement> RowData { get; init; }
 
     /// <summary>
-    /// Monotonic row version. Incremented per edit — the hook for optimistic
-    /// concurrency on row updates, so two clients editing one row can be
-    /// detected rather than silently last-writer-wins.
+    /// Monotonic row version, incremented on each edit.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>This is NOT optimistic concurrency, despite looking like it.</b> An
+    /// earlier revision of this comment claimed it was; probing disproved that
+    /// (2026-09-16). Sending a deliberately stale <c>version</c> on
+    /// <c>PUT /api/lists/{id}/data/{rowId}</c> is accepted:
+    /// </para>
+    /// <code>
+    /// row at version 2, PUT with {"data":{…},"version":1}
+    ///   -> 200, version becomes 3, the write lands
+    /// </code>
+    /// <para>
+    /// So the server does not compare-and-swap on it — row writes are
+    /// last-writer-wins and a concurrent edit is silently lost. Treat this as a
+    /// display/audit value only. (Contrast the app-settings store, which DOES
+    /// do real CAS via <c>baseVersion</c> and returns <c>409
+    /// version_conflict</c> — see #41.)
+    /// </para>
+    /// </remarks>
     public int Version { get; init; }
 
     /// <summary>Server-assigned ordinal. Null on a schema-less list.</summary>
@@ -57,6 +74,13 @@ public sealed class ListDataRow
     /// Read-only "key: value, key2: value2" preview. Adequate while rows are
     /// freeform; the typed, schema-driven renderer is #21.
     /// </summary>
+    /// <remarks>
+    /// Note for anyone writing rows: <c>PUT /api/lists/{id}/data/{rowId}</c>
+    /// <b>replaces</b> <c>rowData</c> rather than merging it. Verified live —
+    /// a row holding <c>{a,b}</c> PUT with only <c>{a}</c> came back as
+    /// <c>{a}</c>, silently dropping <c>b</c>. So an editor must re-send every
+    /// key it knows about, echoing untouched values.
+    /// </remarks>
     public string DisplaySummary =>
         string.Join(", ", RowData.Select(kv => $"{kv.Key}: {kv.Value}"));
 
