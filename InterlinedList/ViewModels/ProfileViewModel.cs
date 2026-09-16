@@ -17,7 +17,15 @@ public partial class ProfileViewModel : ObservableObject
 
     public ObservableCollection<FollowUser> FollowRequests { get; } = new();
     public ObservableCollection<MessageItemViewModel> Messages { get; } = new();
-    public ObservableCollection<FollowUser> Mutuals { get; } = new();
+    /// <summary>
+    /// Mutual-follow counts. The API exposes counts only — there is no endpoint
+    /// listing the mutual users, so the old clickable chips could never work
+    /// (#160).
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasMutuals))]
+    [NotifyPropertyChangedFor(nameof(MutualsSummary))]
+    private MutualFollowCounts? mutuals;
 
     [ObservableProperty]
     private string lookupUsername = "";
@@ -48,7 +56,9 @@ public partial class ProfileViewModel : ObservableObject
 
     public bool HasProfile => Profile is not null;
 
-    public bool HasMutuals => Mutuals.Count > 0;
+    public bool HasMutuals => Mutuals?.HasAny == true;
+
+    public string MutualsSummary => Mutuals?.Summary ?? string.Empty;
 
     public string FollowButtonText =>
         Relationship?.IsFollowing == true ? "Following"
@@ -63,7 +73,6 @@ public partial class ProfileViewModel : ObservableObject
     {
         _session = session;
         FollowRequests.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasRequests));
-        Mutuals.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasMutuals));
     }
 
     [RelayCommand]
@@ -124,9 +133,7 @@ public partial class ProfileViewModel : ObservableObject
             foreach (var message in page.Messages)
                 Messages.Add(new MessageItemViewModel(message, _session.Api, _session.CurrentUser?.Id));
 
-            Mutuals.Clear();
-            foreach (var mutual in await _session.Api.GetMutualAsync(profile.Id))
-                Mutuals.Add(mutual);
+            Mutuals = await _session.Api.GetMutualCountsAsync(profile.Id);
 
             ErrorMessage = null;
         }
