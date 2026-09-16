@@ -215,11 +215,22 @@ ignores preferences set on the web; `Models/Message.cs` drops 9 live fields;
      `/api/user/front-wall-layout`.
    - `GET /api/organizations/{id}/members`, `GET /api/linkedin/targets`,
      `GET /api/linkedin/posting-targets` → `200` (corrected 2026-07-31).
-   - `GET /api/github/repos` and `/api/github/orgs` → `200 []`. An account with
-     no GitHub identity linked gets an **empty array, not an error** — the
-     earlier "every `/api/github/*` call returns 'GitHub account not linked'"
-     claim was wrong, and the whole GitHub surface is buildable against the
-     empty state.
+   - `GET /api/github/repos` and `/api/github/orgs` → `200 []`. The earlier
+     "every `/api/github/*` call returns 'GitHub account not linked'" claim was
+     wrong — the whole GitHub surface is buildable.
+     **But don't read those empty arrays as "nothing is linked."** The test
+     account *is* GitHub-linked (`GET /api/user/identities` shows provider
+     `github`, username `InterlinedListMessenger`) — the arrays are empty
+     because that GitHub account owns no repos and joins no orgs. So the
+     genuinely-unlinked response shape is **still unobserved**, and link state
+     must be read from `/api/user/identities` (consistent with constraint 2
+     below), never inferred from an empty collection.
+     Two more live facts worth having: `GET /api/github/repos` needs an
+     **`?org=`** to return anything (`?org=github` → 559 repos in one bare
+     array — the server walks GitHub's pages itself, so **no client paging**,
+     with an apparent 2000 cap), and `?org=<a *user* rather than an org>`
+     returns `404`. `GET /api/github/issues` without `?repo=owner/repo` and
+     without a `githubDefaultRepo` returns `400 "Repository required…"`.
    - `/api/ai/*`, `/api/tags/*`, `/api/user/app-settings/*`, `/api/limits`,
      `/api/link-metadata`, `/api/documents/tree`, `/api/folders`,
      `/api/lists/{id}/schema|views|contributors|invites|watchers/me`,
