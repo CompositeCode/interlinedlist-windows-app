@@ -36,6 +36,27 @@ public sealed partial class InterlinedApiClient
     public Task PostReplyAsync(string parentId, string content, bool publiclyVisible, CancellationToken ct = default)
         => PostMessageAsync(content, publiclyVisible, parentId: parentId, ct: ct);
 
+    /// <summary>
+    /// The feed, optionally filtered to one tag via <c>GET /api/messages?tag=</c>.
+    /// A distinct name rather than an overload of <c>GetMessagesAsync</c> in
+    /// InterlinedApiClient.cs, which can't be edited (open PR #130) and whose
+    /// optional parameters would make an added <c>tag</c> overload ambiguous.
+    /// </summary>
+    /// <remarks>
+    /// Live-verified 2026-09-16: the filter is case-insensitive, pages with
+    /// <c>offset</c>/<c>limit</c> like the unfiltered feed, and handles tags
+    /// containing spaces once URL-encoded.
+    /// </remarks>
+    public Task<MessagesPage> GetFeedPageAsync(
+        int limit = 20, int offset = 0, string? tag = null, CancellationToken ct = default)
+    {
+        var path = $"api/messages?limit={limit}&offset={offset}";
+        if (tag is { Length: > 0 })
+            path += $"&tag={Uri.EscapeDataString(tag)}";
+
+        return GetJsonAsync<MessagesPage>(path, ct);
+    }
+
     // ── Push (repost) / Quote ───────────────────────────────────────────────────
 
     /// <summary>
@@ -60,6 +81,7 @@ public sealed partial class InterlinedApiClient
         if (draft.ScheduledAt is { } at) body["scheduledAt"] = at.UtcDateTime;
         if (draft.ImageUrls is { Count: > 0 } images) body["imageUrls"] = images;
         if (draft.VideoUrls is { Count: > 0 } videos) body["videoUrls"] = videos;
+        if (draft.Tags is { Count: > 0 } tags) body["tags"] = tags;
 
         return SendVoidAsync(HttpMethod.Post, "api/messages", body, ct);
     }

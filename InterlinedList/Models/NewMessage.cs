@@ -44,4 +44,12 @@ public sealed record NewMessage
 
     public IReadOnlyList<string>? ImageUrls { get; init; }
     public IReadOnlyList<string>? VideoUrls { get; init; }
+
+    /// <summary>
+    /// Freeform tags, posted as <c>tags: string[]</c>. Tags may contain spaces
+    /// and punctuation — live examples include <c>orbit culture</c> and
+    /// <c>life is short, o brave girl</c> — so they are not hashtag-shaped
+    /// single words and must not be split on whitespace.
+    /// </summary>
+    public IReadOnlyList<string>? Tags { get; init; }
 }
