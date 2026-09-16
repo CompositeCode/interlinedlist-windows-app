@@ -29,8 +29,13 @@ public partial class App : Application
         try
         {
             base.OnStartup(e);
+
+            // Before a session exists there is no server preference to honor, so
+            // the OS setting is the whole answer. ApplyEffectiveTheme takes over
+            // the moment CurrentUser lands (below, and on every later login).
             ApplyTheme(IsSystemDarkMode());
             SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
+            AppServices.Session.PropertyChanged += OnSessionPropertyChanged;
 
             bool restored;
             try
@@ -133,13 +138,40 @@ public partial class App : Application
     protected override void OnExit(ExitEventArgs e)
     {
         SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
+        AppServices.Session.PropertyChanged -= OnSessionPropertyChanged;
         base.OnExit(e);
     }
 
+    // ── Theme: explicit server preference > OS setting (#46) ───────────────────
+
     private void OnUserPreferenceChanged(object sender, UserPreferenceChangedEventArgs e)
     {
+        // The OS listener stays wired, but it no longer decides on its own: if
+        // the account pinned light/dark, flipping Windows' theme must not move
+        // the app. ApplyEffectiveTheme re-resolves the precedence either way.
         if (e.Category == UserPreferenceCategory.General)
-            Dispatcher.Invoke(() => ApplyTheme(IsSystemDarkMode()));
+            Dispatcher.Invoke(ApplyEffectiveTheme);
+    }
+
+    private void OnSessionPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        // Fires on session restore, on login, and on the settings screen's
+        // read-after-write refresh — i.e. every moment the server's `theme`
+        // could have changed under us.
+        if (e.PropertyName == nameof(Services.SessionService.CurrentUser))
+            Dispatcher.Invoke(ApplyEffectiveTheme);
+    }
+
+    /// <summary>
+    /// Resolves the account's <c>theme</c> preference against the OS setting and
+    /// applies the result. <c>light</c>/<c>dark</c> win outright; <c>system</c>
+    /// — and any other value, since the server does not validate this field —
+    /// follows Windows.
+    /// </summary>
+    internal void ApplyEffectiveTheme()
+    {
+        var serverTheme = AppServices.Session.CurrentUser?.Theme;
+        ApplyTheme(ViewModels.UserPreferenceOptions.ResolveDark(serverTheme, IsSystemDarkMode()));
     }
 
     internal void ApplyTheme(bool dark)
