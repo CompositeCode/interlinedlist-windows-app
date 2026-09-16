@@ -106,6 +106,196 @@ public partial class ListColumnEditorViewModel : ObservableObject
           + string.Join(", ", ListFieldType.PropertiesEditable)
           + "). Saving those requires the destructive column rebuild.";
 
+    // ── The two write paths, deliberately two actions ───────────────────────
+    // PUT /api/lists/{id}/schema is one route with two bodies whose consequences
+    // are nothing alike, so the UI never chooses for the user:
+    //
+    //   "Save columns"     → { properties: [ … ] }  updates columns in place,
+    //                        row data untouched, column ids kept.
+    //   "Rebuild columns…" → { schema: { … } }      drops and recreates EVERY
+    //                        column, overwrites the list's title AND description,
+    //                        and leaves values whose key no longer has a column
+    //                        orphaned in rowData.
+    //
+    // Both measured live 2026-09-16. Note the asymmetry in what "removing a
+    // column" costs, which is why the two confirmations read differently:
+    //   * properties + ?force=true STRIPS the key from every row (data deleted);
+    //   * a rebuild LEAVES the value in rowData, unshown and unvalidated.
+
+    /// <summary>True while the destructive rebuild is waiting for confirmation.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(RebuildImpactSummary))]
+    private bool isRebuildConfirmationOpen;
+
+    /// <summary>
+    /// The title the rebuild will write. Editable because the rebuild writes it
+    /// whether the user meant to or not: <c>schema.name</c> overwrote a list's
+    /// title in testing, so the box is pre-filled with the current one.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(RebuildImpactSummary))]
+    private string rebuildTitle = "";
+
+    /// <summary>
+    /// The description the rebuild will write. Blank CLEARS it — omitting
+    /// <c>schema.description</c> wiped a list's description in testing — so the
+    /// box is pre-filled and the confirmation says so.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(RebuildImpactSummary))]
+    private string rebuildDescription = "";
+
+    /// <summary>What the SAFE save is about to do, in the user's terms.</summary>
+    public string SavePlanSummary
+    {
+        get
+        {
+            if (IsNewListMode)
+                return $"{Columns.Count} column(s) will be created together with the list.";
+
+            var parts = new List<string>();
+
+            if (Columns.Count(c => !c.IsExistingColumn) is > 0 and var added)
+                parts.Add($"adds {added}");
+            if (Columns.Count(c => c.IsRenamed) is > 0 and var renamed)
+                parts.Add($"renames {renamed}");
+            if (Columns.Count(c => c.IsRetyped) is > 0 and var retyped)
+                parts.Add($"retypes {retyped}");
+            if (RemovedKeys.Count > 0)
+                parts.Add($"deletes {string.Join(", ", RemovedKeys)}");
+            if (IsReordered)
+                parts.Add("reorders the columns");
+
+            return parts.Count == 0
+                ? "No column changes yet."
+                : $"Save columns {string.Join(", ", parts)} — in place, with every row's data kept.";
+        }
+    }
+
+    /// <summary>True when the saved columns are no longer in their saved order.</summary>
+    private bool IsReordered
+    {
+        get
+        {
+            var orders = Columns.Where(c => c.IsExistingColumn)
+                                .Select(c => c.StoredOrder ?? 0)
+                                .ToList();
+            return orders.Zip(orders.Skip(1)).Any(pair => pair.Second < pair.First);
+        }
+    }
+
+    /// <summary>
+    /// Exactly what the rebuild costs, with the affected columns named. Says
+    /// nothing about rows being deleted, because they are not: the measured
+    /// cost is orphaned values, new column ids, and an overwritten
+    /// title/description.
+    /// </summary>
+    public string RebuildImpactSummary
+    {
+        get
+        {
+            var lines = new List<string>
+            {
+                $"All {Columns.Count} column(s) are dropped and recreated with new ids."
+            };
+
+            lines.Add(RemovedKeys.Count > 0
+                ? "Your rows are NOT deleted — but the values under "
+                  + string.Join(", ", RemovedKeys)
+                  + " stay in each row with no column to show or validate them."
+                : "Your rows are NOT deleted, and every column here keeps its key, so their values stay reachable.");
+
+            var carried = Columns.Count(c => c.Validation is { IsEmpty: false } || c.Visibility?.Condition is not null);
+            lines.Add(carried > 0
+                ? $"Validation rules and visibility conditions on {carried} column(s) are re-sent as they were read, so they survive — anything added on the web since this editor opened does not."
+                : "Any validation rule or visibility condition a column has that this editor didn't read is lost.");
+
+            lines.Add(string.IsNullOrWhiteSpace(RebuildTitle)
+                ? "The list needs a title — the rebuild writes it from this box."
+                : $"The list's title becomes “{RebuildTitle.Trim()}”.");
+
+            lines.Add(string.IsNullOrWhiteSpace(RebuildDescription)
+                ? "The list's description is CLEARED (a blank box clears it)."
+                : $"The list's description becomes “{RebuildDescription.Trim()}”.");
+
+            return string.Join("\n", lines.Select(line => "• " + line));
+        }
+    }
+
+    private bool CanStartRebuild() => !IsBusy && !IsNewListMode && List is not null && IsDraftSavable;
+
+    /// <summary>
+    /// Open the rebuild confirmation. Separate from <see cref="SaveCommand"/> on
+    /// purpose — a single "Save schema" button that always sent the DSL is the
+    /// data-loss footgun this whole split exists to prevent.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanStartRebuild))]
+    private void StartRebuild()
+    {
+        if (List is not { } list) return;
+        if (!ValidateDraft()) return;
+
+        RebuildTitle = list.Title;
+        RebuildDescription = list.Description ?? "";
+        ForceConfirmationMessage = null;
+        _pendingForcedSave = null;
+        ErrorMessage = null;
+        StatusMessage = null;
+        IsRebuildConfirmationOpen = true;
+    }
+
+    [RelayCommand]
+    private void CancelRebuild()
+    {
+        IsRebuildConfirmationOpen = false;
+        StatusMessage = "Nothing was changed.";
+    }
+
+    [RelayCommand]
+    private async Task ConfirmRebuildAsync()
+    {
+        if (List is not { } list) return;
+        if (!ValidateDraft()) return;
+
+        if (string.IsNullOrWhiteSpace(RebuildTitle))
+        {
+            ErrorMessage = "The rebuild writes the list's title — give it one.";
+            return;
+        }
+
+        IsBusy = true;
+        SaveCommand.NotifyCanExecuteChanged();
+        StartRebuildCommand.NotifyCanExecuteChanged();
+        try
+        {
+            var description = string.IsNullOrWhiteSpace(RebuildDescription) ? null : RebuildDescription.Trim();
+            var updated = await _session.Api.RebuildListSchemaDestructiveAsync(
+                list.Id, BuildSchema(RebuildTitle.Trim(), description));
+
+            IsRebuildConfirmationOpen = false;
+            ErrorMessage = null;
+            List = updated;
+            StatusMessage = $"Rebuilt {Columns.Count} column(s). The list is now titled “{updated.Title}”. "
+                          + "Rows were kept; any value whose column is gone is still stored but no longer shown.";
+            await ReloadAsync();
+            Saved?.Invoke(this, EventArgs.Empty);
+        }
+        catch (ListSchemaException ex)
+        {
+            AttachIssues(ex);
+        }
+        catch (InterlinedApiException ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsBusy = false;
+            SaveCommand.NotifyCanExecuteChanged();
+            StartRebuildCommand.NotifyCanExecuteChanged();
+        }
+    }
+
     public ListColumnEditorViewModel(SessionService session)
     {
         _session = session;
@@ -173,6 +363,7 @@ public partial class ListColumnEditorViewModel : ObservableObject
         _storedKeys.Clear();
         _pendingForcedSave = null;
         ForceConfirmationMessage = null;
+        IsRebuildConfirmationOpen = false;
         ErrorMessage = null;
         StatusMessage = null;
     }
@@ -382,7 +573,7 @@ public partial class ListColumnEditorViewModel : ObservableObject
 
         if (!CanUsePropertiesPath)
         {
-            ErrorMessage = RebuildOnlyWarning;
+            ErrorMessage = RebuildOnlyWarning + " Use “Rebuild columns” for that — it says what the rebuild costs before it runs.";
             return;
         }
 
@@ -471,6 +662,9 @@ public partial class ListColumnEditorViewModel : ObservableObject
         OnPropertyChanged(nameof(RebuildOnlyWarning));
         OnPropertyChanged(nameof(IsDraftSavable));
         OnPropertyChanged(nameof(SaveBlockedReason));
+        OnPropertyChanged(nameof(SavePlanSummary));
+        OnPropertyChanged(nameof(RebuildImpactSummary));
         SaveCommand.NotifyCanExecuteChanged();
+        StartRebuildCommand.NotifyCanExecuteChanged();
     }
 }
