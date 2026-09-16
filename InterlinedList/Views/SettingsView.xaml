@@ -424,9 +424,15 @@
                                                 </ItemsControl.ItemsPanel>
                                                 <ItemsControl.ItemTemplate>
                                                     <DataTemplate DataType="{x:Type vm:NotificationChannelViewModel}">
+                                                        <!-- ToolTip explains a channel this
+                                                             desktop app cannot deliver: push is
+                                                             iOS/Android only, so the setting
+                                                             governs the user's phone. -->
                                                         <CheckBox Content="{Binding Label}"
                                                                   IsChecked="{Binding Enabled, Mode=TwoWay}"
                                                                   IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                                                                  ToolTip="{Binding DeliveryNote}"
+                                                                  ToolTipService.ShowOnDisabled="True"
                                                                   Foreground="{DynamicResource TextBodyBrush}"
                                                                   FontSize="12"
                                                                   Margin="0,0,14,0"

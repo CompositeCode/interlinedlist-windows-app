@@ -66,6 +66,13 @@ public partial class NotificationChannelViewModel : ObservableObject
     public string Channel { get; }
     public string Label { get; }
 
+    /// <summary>
+    /// Explains a channel this desktop client cannot deliver itself (push is
+    /// iOS/Android only — see <see cref="NotificationChannels.DeliveryNoteFor"/>).
+    /// Null for channels that do apply here.
+    /// </summary>
+    public string? DeliveryNote { get; }
+
     [ObservableProperty]
     private bool enabled;
 
@@ -79,6 +86,7 @@ public partial class NotificationChannelViewModel : ObservableObject
         _eventKey = eventKey;
         Channel = channel;
         Label = NotificationChannels.LabelFor(channel);
+        DeliveryNote = NotificationChannels.DeliveryNoteFor(channel);
         _session = session;
         _onError = onError;
         this.enabled = enabled;

@@ -81,13 +81,34 @@ public sealed class NotificationChannels
     public IReadOnlyDictionary<string, bool> Values => _values;
 
     /// <summary>Human label for a channel key.</summary>
+    /// <remarks>
+    /// <c>push</c> is labelled "Push (mobile)" deliberately. The preference is
+    /// account-wide, but the transport is not: <c>POST /api/push/register</c>
+    /// accepts <c>platform</c> of <c>ios</c> or <c>android</c> only — a Windows
+    /// (WNS) registration is rejected with
+    /// <c>400 {"error":"platform must be ios or android"}</c>, verified live
+    /// 2026-09-16. So this app can never deliver a push itself; the toggle still
+    /// matters because it governs the user's phone. See #128.
+    /// </remarks>
     public static string LabelFor(string channel) => channel switch
     {
-        Push => "Push",
+        Push => "Push (mobile)",
         InApp => "In-app",
         Email => "Email",
         _ => channel,
     };
+
+    /// <summary>
+    /// True for a channel this desktop client cannot itself deliver, so the UI
+    /// can explain rather than imply the setting affects this machine.
+    /// </summary>
+    public static bool IsDeliveredElsewhere(string channel) => channel == Push;
+
+    /// <summary>Tooltip for a channel this client can't deliver, else null.</summary>
+    public static string? DeliveryNoteFor(string channel) => channel == Push
+        ? "Push notifications are delivered to the InterlinedList mobile app. "
+          + "This setting applies to your phone, not to this desktop app."
+        : null;
 }
 
 /// <summary>
