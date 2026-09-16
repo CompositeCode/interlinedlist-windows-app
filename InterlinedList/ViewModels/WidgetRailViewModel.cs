@@ -18,14 +18,21 @@ public sealed partial class WidgetRailViewModel : ObservableObject
     {
         _location = new ProfileLocationProvider(session);
 
+        Weather = new WeatherWidgetViewModel(session, _location);
+        Location = new LocationWidgetViewModel(session, _location);
         News = new NewsWidgetViewModel(session);
         Markets = new MarketsWidgetViewModel(session);
         Transit = new TransitWidgetViewModel(session, _location);
         BikeShare = new BikeShareWidgetViewModel(session, _location);
 
-        Widgets = new WidgetViewModel[] { News, Markets, Transit, BikeShare };
+        // Rail order: the two "where and when you are" cards first, then the
+        // feeds. All four location-dependent cards share one cached coordinate
+        // lookup, so adding these costs no extra GET /api/user.
+        Widgets = new WidgetViewModel[] { Weather, Location, News, Markets, Transit, BikeShare };
     }
 
+    public WeatherWidgetViewModel Weather { get; }
+    public LocationWidgetViewModel Location { get; }
     public NewsWidgetViewModel News { get; }
     public MarketsWidgetViewModel Markets { get; }
     public TransitWidgetViewModel Transit { get; }
