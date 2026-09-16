@@ -54,6 +54,12 @@ public partial class SettingsViewModel : ObservableObject
     // *edit* surface; each one also has a consumption point elsewhere in the app
     // that has to obey it, which is the other half of #46.
 
+    // ── Account standing (see #50) ──────────────────────────────────────────────
+    // Recomputed on every CurrentUser snapshot. Null until the first load; the
+    // banner is collapsed for a normal `active` account.
+    [ObservableProperty]
+    private AccountStatusViewModel? accountStatus;
+
     [ObservableProperty]
     private string theme = UserPreferenceOptions.ThemeSystem;
 
@@ -108,10 +114,26 @@ public partial class SettingsViewModel : ObservableObject
     // Billing/subscription is cookie-session-only server-side, so the native app
     // hands off to the website (same pattern as OAuth linking).
     [RelayCommand]
-    private void OpenWebAccount()
+    private void OpenWebAccount() => OpenInBrowser(ApiConfig.BaseUrl);
+
+    /// <summary>
+    /// The account-status banner's call to action — verify your email, or appeal.
+    /// Both are browser handoffs: <c>POST /api/auth/send-verification-email</c> is
+    /// cookie-session-only per the OpenAPI spec (<c>x-auth-type: session</c>), so
+    /// a bearer-token client structurally can't trigger it, and there's no appeal
+    /// endpoint at all.
+    /// </summary>
+    [RelayCommand]
+    private void OpenAccountStatusAction()
+    {
+        if (AccountStatus?.ActionUrl is { Length: > 0 } url)
+            OpenInBrowser(url);
+    }
+
+    private static void OpenInBrowser(string url)
         => System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
         {
-            FileName = ApiConfig.BaseUrl,
+            FileName = url,
             UseShellExecute = true
         });
 
@@ -286,6 +308,7 @@ public partial class SettingsViewModel : ObservableObject
 
     private void PrefillFromUser(CurrentUser? user)
     {
+        AccountStatus = new AccountStatusViewModel(user);
         if (user is null) return;
 
         DisplayName = user.DisplayName ?? "";
