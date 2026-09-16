@@ -1,0 +1,205 @@
+<UserControl x:Class="InterlinedList.Views.GitHubConnectionPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:InterlinedList.Views"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d"
+             d:DesignWidth="660">
+
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
+        <local:NullOrEmptyToVisibilityConverter x:Key="NullOrEmptyToVisibility"/>
+
+        <Style x:Key="PanelSmallBtnStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="10,3"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="3"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="PanelPrimaryBtnStyle" TargetType="Button">
+            <Setter Property="Background" Value="{DynamicResource PrimaryBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="14,6"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                CornerRadius="4"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="{DynamicResource PrimaryHoverBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <Border Background="{DynamicResource SurfaceBrush}"
+            BorderBrush="{DynamicResource BorderBrush}"
+            BorderThickness="1"
+            CornerRadius="4"
+            Padding="16"
+            Margin="0,0,0,16">
+        <StackPanel>
+
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
+                <local:GitHubMark Width="15" Height="15"
+                                  VerticalAlignment="Center"
+                                  Margin="0,0,7,0"
+                                  Foreground="{DynamicResource TextBrush}"/>
+                <TextBlock Text="GitHub"
+                           FontSize="14" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextBrush}"
+                           VerticalAlignment="Center"/>
+            </StackPanel>
+
+            <TextBlock Text="{Binding Link.StatusLine}"
+                       FontSize="12"
+                       Foreground="{DynamicResource TextBodyBrush}"
+                       TextWrapping="Wrap"
+                       Margin="0,0,0,2"/>
+
+            <TextBlock FontSize="11"
+                       Foreground="{DynamicResource TextMutedBrush}"
+                       Margin="0,0,0,2"
+                       Visibility="{Binding Link.IsLinked, Converter={StaticResource BoolToVisibility}}">
+                <Run Text="Connected"/>
+                <Run Text="{Binding Link.LinkState.ConnectedAt, StringFormat={}{0:d}, Mode=OneWay}"/>
+                <Run Text="· last verified"/>
+                <Run Text="{Binding Link.LinkState.LastVerifiedAt, StringFormat={}{0:d}, Mode=OneWay}"/>
+            </TextBlock>
+
+            <TextBlock Text="{Binding DefaultRepoLine}"
+                       FontSize="11"
+                       FontFamily="JetBrains Mono, Consolas"
+                       Foreground="{DynamicResource TextMutedBrush}"
+                       TextWrapping="Wrap"
+                       Margin="0,0,0,10"
+                       Visibility="{Binding Link.IsLinked, Converter={StaticResource BoolToVisibility}}"/>
+
+            <!-- Sign-in-only vs Issues-capable: the app cannot tell, and says so
+                 rather than drawing a confident tick. /api/user/identities has no
+                 scope field, and /api/auth/github/status reports server config, not
+                 user grants. -->
+            <Border Background="{DynamicResource Surface2Brush}"
+                    BorderBrush="{DynamicResource BorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="3"
+                    Padding="10,8"
+                    Margin="0,0,0,10">
+                <StackPanel>
+                    <TextBlock Text="GitHub-backed lists need the Issues scope"
+                               FontSize="12" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextBrush}"
+                               TextWrapping="Wrap"
+                               Margin="0,0,0,4"/>
+                    <TextBlock Text="{Binding Link.ReconnectExplanation}"
+                               FontSize="11"
+                               Foreground="{DynamicResource TextBodyBrush}"
+                               TextWrapping="Wrap"
+                               Margin="0,0,0,6"/>
+                    <TextBlock Text="{Binding Link.ScopeNote}"
+                               FontSize="11"
+                               Foreground="{DynamicResource TextMutedBrush}"
+                               TextWrapping="Wrap"/>
+                </StackPanel>
+            </Border>
+
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                <Button Content="{Binding Link.ReconnectLabel}"
+                        Command="{Binding Link.ReconnectCommand}"
+                        Style="{StaticResource PanelPrimaryBtnStyle}"
+                        Margin="0,0,8,0"/>
+                <Button Content="Check again"
+                        Command="{Binding LoadCommand}"
+                        Style="{StaticResource PanelSmallBtnStyle}"
+                        VerticalAlignment="Center"
+                        Margin="0,0,6,0"/>
+                <Button Content="Check GitHub access"
+                        Command="{Binding CheckIssuesAccessCommand}"
+                        Style="{StaticResource PanelSmallBtnStyle}"
+                        VerticalAlignment="Center"
+                        Margin="0,0,6,0"
+                        Visibility="{Binding Link.IsLinked, Converter={StaticResource BoolToVisibility}}"/>
+                <TextBlock Text="Checking…"
+                           FontSize="11"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextMutedBrush}"
+                           Visibility="{Binding IsChecking, Converter={StaticResource BoolToVisibility}}"/>
+            </StackPanel>
+
+            <!-- A DIFFERENT remedy, deliberately not a second Reconnect button:
+                 re-running OAuth with unchanged scopes returns silently, so only
+                 GitHub's authorized-apps page can approve an organization. The URL
+                 comes from manageOrgAccessUrl, which is the one thing
+                 /api/auth/github/status is actually good for. -->
+            <StackPanel Visibility="{Binding Link.CanManageOrgAccess, Converter={StaticResource BoolToVisibility}}"
+                        Margin="0,0,0,8">
+                <Button Content="Manage organization access on GitHub"
+                        Command="{Binding Link.ManageOrgAccessCommand}"
+                        Style="{StaticResource PanelSmallBtnStyle}"
+                        HorizontalAlignment="Left"
+                        Margin="0,0,0,4"/>
+                <TextBlock Text="If an organization's repositories are missing, that's org approval — not a missing scope. Reconnecting can't fix it; granting InterlinedList access to the organization on GitHub can."
+                           FontSize="11"
+                           Foreground="{DynamicResource TextMutedBrush}"
+                           TextWrapping="Wrap"/>
+            </StackPanel>
+
+            <TextBlock Text="{Binding Link.HandoffNotice}"
+                       FontSize="11"
+                       Foreground="{DynamicResource PrimaryBrush}"
+                       TextWrapping="Wrap"
+                       Margin="0,0,0,4"
+                       Visibility="{Binding Link.HandoffNotice, Converter={StaticResource NullOrEmptyToVisibility}}"/>
+
+            <TextBlock Text="{Binding AccessCheckResult}"
+                       FontSize="11"
+                       Foreground="{DynamicResource TextBodyBrush}"
+                       TextWrapping="Wrap"
+                       Margin="0,0,0,4"
+                       Visibility="{Binding AccessCheckResult, Converter={StaticResource NullOrEmptyToVisibility}}"/>
+
+            <TextBlock Text="{Binding Link.ErrorMessage}"
+                       Foreground="#FFE81123"
+                       FontSize="11"
+                       TextWrapping="Wrap"
+                       Visibility="{Binding Link.ErrorMessage, Converter={StaticResource NullOrEmptyToVisibility}}"/>
+        </StackPanel>
+    </Border>
+</UserControl>
