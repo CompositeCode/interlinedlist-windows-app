@@ -117,6 +117,37 @@ public partial class FeedViewModel : ObservableObject
     // dispatcher.
     private CancellationTokenSource? _autocompleteCts;
 
+    // ── Link previews ───────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// The viewer's <c>showPreviews</c> preference from <c>GET /api/user</c>. When
+    /// off, no preview card renders anywhere in the feed — not on cards, not in the
+    /// composer. It is <c>false</c> on the test account, so the off path is the one
+    /// that actually got looked at.
+    /// </summary>
+    public bool ShowPreviews => _session.CurrentUser?.ShowPreviews ?? false;
+
+    /// <summary>
+    /// Ad-hoc unfurl of the first URL in the draft
+    /// (<c>GET /api/link-metadata?url=</c>), so the composer shows what the post
+    /// will look like. Null when there's no URL yet, the unfurl failed, or
+    /// previews are switched off.
+    /// </summary>
+    [ObservableProperty]
+    private LinkPreviewViewModel? composePreview;
+
+    // Same debounce discipline as the tag autocomplete.
+    private CancellationTokenSource? _composePreviewCts;
+    private string? _composePreviewUrl;
+
+    /// <summary>
+    /// First http(s) URL in a draft. Trailing punctuation is trimmed — people
+    /// write "see https://example.com/x." and the sentence period is not part of
+    /// the link.
+    /// </summary>
+    private static readonly System.Text.RegularExpressions.Regex UrlPattern =
+        new(@"https?://[^\s<>""]+", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
     public FeedViewModel(SessionService session)
     {
         _session = session;
@@ -130,9 +161,9 @@ public partial class FeedViewModel : ObservableObject
     /// <see cref="MessageItemViewModel.Posted"/> — a Push or Quote publishes a new
     /// post, and the write response isn't parsed, so the feed re-fetches.
     /// </summary>
-    private MessageItemViewModel Wrap(Models.Message message)
+    private MessageItemViewModel Wrap(Message message)
     {
-        var item = new MessageItemViewModel(message, _session.Api, _session.CurrentUser?.Id);
+        var item = new MessageItemViewModel(message, _session.Api, _session.CurrentUser?.Id, ShowPreviews);
         item.Posted += OnItemPosted;
         return item;
     }
@@ -218,6 +249,69 @@ public partial class FeedViewModel : ObservableObject
     {
         AddTagCommand.NotifyCanExecuteChanged();
         _ = SuggestTagsAsync(value);
+    }
+
+    // ── Compose-time link preview ───────────────────────────────────────────────
+
+    private static string? FirstUrl(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return null;
+        var match = UrlPattern.Match(text);
+        if (!match.Success) return null;
+
+        var url = match.Value.TrimEnd('.', ',', ';', ':', '!', '?', ')', ']', '}', '"', '\'');
+        return url.Length > "https://".Length ? url : null;
+    }
+
+    /// <summary>
+    /// Debounced ad-hoc unfurl of the draft's first URL. Fire-and-forget, like the
+    /// tag autocomplete: it must not block the dispatcher, and a keystroke that
+    /// supersedes an in-flight request cancels it.
+    /// </summary>
+    private async Task UpdateComposePreviewAsync(string? text)
+    {
+        if (!ShowPreviews)
+        {
+            ComposePreview = null;
+            return;
+        }
+
+        var url = FirstUrl(text);
+        if (url is null)
+        {
+            _composePreviewCts?.Cancel();
+            _composePreviewUrl = null;
+            ComposePreview = null;
+            return;
+        }
+
+        // Still the same link — don't re-unfurl on every character of prose typed
+        // after it.
+        if (string.Equals(url, _composePreviewUrl, StringComparison.OrdinalIgnoreCase)) return;
+
+        _composePreviewCts?.Cancel();
+        _composePreviewCts?.Dispose();
+        var cts = new CancellationTokenSource();
+        _composePreviewCts = cts;
+        _composePreviewUrl = url;
+
+        try
+        {
+            await Task.Delay(600, cts.Token);
+            var preview = await _session.Api.GetLinkMetadataAsync(url, cts.Token);
+            if (cts.Token.IsCancellationRequested) return;
+
+            // A failed unfurl comes back as null, not as an exception — no card.
+            ComposePreview = preview is null ? null : new LinkPreviewViewModel(preview);
+        }
+        catch (OperationCanceledException)
+        {
+            // Superseded.
+        }
+        catch (InterlinedApiException)
+        {
+            ComposePreview = null;
+        }
     }
 
     /// <summary>
@@ -506,5 +600,9 @@ public partial class FeedViewModel : ObservableObject
     partial void OnIsLoadingChanged(bool value) => LoadMoreCommand.NotifyCanExecuteChanged();
     partial void OnIsLoadingMoreChanged(bool value) => LoadMoreCommand.NotifyCanExecuteChanged();
     partial void OnIsPostingChanged(bool value) => PostCommand.NotifyCanExecuteChanged();
-    partial void OnComposeTextChanged(string value) => PostCommand.NotifyCanExecuteChanged();
+    partial void OnComposeTextChanged(string value)
+    {
+        PostCommand.NotifyCanExecuteChanged();
+        _ = UpdateComposePreviewAsync(value);
+    }
 }

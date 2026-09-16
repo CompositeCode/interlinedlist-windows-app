@@ -131,6 +131,78 @@
             </Setter>
         </Style>
 
+        <!-- Link preview card: the whole card is the click target -->
+        <Style x:Key="LinkPreviewBtnStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bg"
+                                Background="{DynamicResource Surface2Brush}"
+                                BorderBrush="{DynamicResource BorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="4">
+                            <ContentPresenter/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="BorderBrush"
+                                        Value="{DynamicResource BorderStrongBrush}"/>
+                                <Setter TargetName="Bg" Property="Background"
+                                        Value="{DynamicResource Surface3Brush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!--
+            One unfurled link. Shared by the feed cards (inline linkMetadata) and
+            the composer's ad-hoc preview, so both look identical.
+        -->
+        <DataTemplate x:Key="LinkPreviewCardTemplate" DataType="{x:Type vm:LinkPreviewViewModel}">
+            <Button Style="{StaticResource LinkPreviewBtnStyle}"
+                    Command="{Binding OpenCommand}"
+                    ToolTip="{Binding Url}"
+                    Margin="0,0,0,8">
+                <DockPanel LastChildFill="True">
+                    <!-- Collapses if the thumbnail fails to load: text-only card, not a gap -->
+                    <Border DockPanel.Dock="Left"
+                            Width="96" Height="96"
+                            ClipToBounds="True"
+                            CornerRadius="4,0,0,4"
+                            Background="{DynamicResource Surface3Brush}"
+                            Visibility="{Binding HasThumbnail, Converter={StaticResource BoolToVisibility}}">
+                        <Image Source="{Binding Thumbnail}" Stretch="UniformToFill"/>
+                    </Border>
+                    <StackPanel Margin="10,8" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding Title}"
+                                   FontSize="12" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextBrush}"
+                                   TextWrapping="Wrap"
+                                   MaxHeight="36" TextTrimming="CharacterEllipsis"/>
+                        <TextBlock Text="{Binding Description}"
+                                   FontSize="11"
+                                   Foreground="{DynamicResource TextMutedBrush}"
+                                   TextWrapping="Wrap"
+                                   MaxHeight="32" TextTrimming="CharacterEllipsis"
+                                   Margin="0,4,0,0"
+                                   Visibility="{Binding HasDescription, Converter={StaticResource BoolToVisibility}}"/>
+                        <TextBlock Text="{Binding Host}"
+                                   FontFamily="JetBrains Mono, Consolas"
+                                   FontSize="10"
+                                   Foreground="{DynamicResource TextMutedBrush}"
+                                   Margin="0,6,0,0"/>
+                    </StackPanel>
+                </DockPanel>
+            </Button>
+        </DataTemplate>
+
         <!-- Clickable author name → opens their profile -->
         <Style x:Key="AuthorLinkBtnStyle" TargetType="Button">
             <Setter Property="Background" Value="Transparent"/>
@@ -230,6 +302,26 @@
                               FontSize="12"
                               VerticalAlignment="Center"/>
                 </StackPanel>
+
+                <!--
+                    Compose-time unfurl of the draft's first URL, via
+                    GET /api/link-metadata. Nothing renders when the user has
+                    previews off, when there's no URL, or when the unfurl failed.
+                -->
+                <ContentControl Content="{Binding ComposePreview}"
+                                ContentTemplate="{StaticResource LinkPreviewCardTemplate}"
+                                Margin="0,8,0,0">
+                    <ContentControl.Style>
+                        <Style TargetType="ContentControl">
+                            <Setter Property="Visibility" Value="Visible"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding ComposePreview}" Value="{x:Null}">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </ContentControl.Style>
+                </ContentControl>
 
                 <!-- Tags for the next post -->
                 <StackPanel Margin="0,8,0,0">
@@ -644,6 +736,15 @@
                                                 </DataTemplate>
                                             </ItemsControl.ItemTemplate>
                                         </ItemsControl>
+
+                                        <!--
+                                            Link previews, from the inline linkMetadata.
+                                            Empty (so collapsed) when the viewer has
+                                            showPreviews off, or when every unfurl failed.
+                                        -->
+                                        <ItemsControl ItemsSource="{Binding LinkPreviews}"
+                                                      ItemTemplate="{StaticResource LinkPreviewCardTemplate}"
+                                                      Visibility="{Binding HasLinkPreviews, Converter={StaticResource BoolToVisibility}}"/>
 
                                         <!-- Tag chips → filter the feed by that tag -->
                                         <ItemsControl ItemsSource="{Binding Tags}" Margin="0,0,0,6"
