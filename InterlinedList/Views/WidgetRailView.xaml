@@ -177,6 +177,55 @@
                     Style="{StaticResource WidgetIconBtnStyle}"/>
         </Grid>
 
+        <!-- ── Weather ───────────────────────────────────────────────── -->
+        <ContentControl Style="{StaticResource WidgetCardStyle}"
+                        DataContext="{Binding Weather}"
+                        Tag="{Binding Place}">
+            <StackPanel>
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="{Binding Temperature}"
+                               FontFamily="JetBrains Mono, Consolas"
+                               FontSize="24" FontWeight="Medium"
+                               Foreground="{DynamicResource TextBrush}"
+                               VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding Condition}"
+                               FontSize="11"
+                               Foreground="{DynamicResource TextBodyBrush}"
+                               TextWrapping="Wrap"
+                               VerticalAlignment="Center"
+                               Margin="8,0,0,0"/>
+                </StackPanel>
+                <TextBlock Text="{Binding Detail}"
+                           Style="{StaticResource WidgetMetaStyle}"
+                           Margin="0,4,0,0"
+                           Visibility="{Binding Detail,
+                               Converter={StaticResource StringToVisibility}}"/>
+            </StackPanel>
+        </ContentControl>
+
+        <!-- ── Location ──────────────────────────────────────────────── -->
+        <ContentControl Style="{StaticResource WidgetCardStyle}"
+                        DataContext="{Binding Location}">
+            <StackPanel>
+                <TextBlock Text="{Binding Place}"
+                           FontSize="13" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextBrush}"
+                           TextWrapping="Wrap"/>
+                <TextBlock Text="{Binding Country}"
+                           FontSize="11"
+                           Foreground="{DynamicResource TextBodyBrush}"
+                           Margin="0,2,0,0"
+                           Visibility="{Binding Country,
+                               Converter={StaticResource StringToVisibility}}"/>
+                <TextBlock Text="{Binding Timezone}"
+                           Style="{StaticResource WidgetMetaStyle}"
+                           Margin="0,4,0,0"
+                           TextWrapping="Wrap"
+                           Visibility="{Binding Timezone,
+                               Converter={StaticResource StringToVisibility}}"/>
+            </StackPanel>
+        </ContentControl>
+
         <!-- ── Top news ──────────────────────────────────────────────── -->
         <ContentControl Style="{StaticResource WidgetCardStyle}"
                         DataContext="{Binding News}">
