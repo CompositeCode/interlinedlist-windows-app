@@ -35,6 +35,14 @@ public partial class MessageItemViewModel : ObservableObject
     public IReadOnlyList<string> VideoUrls { get; }
     public bool HasVideos => VideoUrls.Count > 0;
 
+    /// <summary>
+    /// Freeform tags on this message. Rendered as clickable chips; the click is
+    /// routed to the feed's tag filter, not handled here (the card has no view of
+    /// the feed's paging state).
+    /// </summary>
+    public IReadOnlyList<string> Tags { get; }
+    public bool HasTags => Tags.Count > 0;
+
     public ObservableCollection<MessageItemViewModel> Replies { get; } = new();
 
     // ── Push / Quote ────────────────────────────────────────────────────────────
@@ -140,6 +148,7 @@ public partial class MessageItemViewModel : ObservableObject
         IsMine = message.UserId == currentUserId;
         ImageUrls = message.ImageUrls ?? new List<string>();
         VideoUrls = message.VideoUrls ?? new List<string>();
+        Tags = message.Tags ?? new List<string>();
 
         digCount = message.DigCount;
         pushCount = message.PushCount;
