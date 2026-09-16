@@ -14,7 +14,7 @@ public partial class ListsViewModel : ObservableObject
     private readonly SessionService _session;
 
     public ObservableCollection<ListSummary> Lists { get; } = new();
-    public ObservableCollection<ListDataRow> Rows { get; } = new();
+    public ObservableCollection<ListRowViewModel> Rows { get; } = new();
     public ObservableCollection<WatchedList> SharedWithMe { get; } = new();
     public ObservableCollection<ShareLink> ShareLinks { get; } = new();
     public ObservableCollection<Collaborator> Watchers { get; } = new();
@@ -52,7 +52,7 @@ public partial class ListsViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsEditingRow))]
-    private ListDataRow? editingRow;
+    private ListRowViewModel? editingRow;
 
     [ObservableProperty]
     private string editRowJson = "";
@@ -60,7 +60,38 @@ public partial class ListsViewModel : ObservableObject
     [ObservableProperty]
     private string watcherSearchQuery = "";
 
+    /// <summary>The selected list's columns, or null while it has none.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSchema))]
+    [NotifyPropertyChangedFor(nameof(ShowTypedRowEditor))]
+    [NotifyPropertyChangedFor(nameof(ShowRawJsonRowEditor))]
+    [NotifyPropertyChangedFor(nameof(RowEditorModeNote))]
+    private ListSchema? selectedSchema;
+
+    /// <summary>
+    /// The raw-JSON escape hatch. It is the ONLY editor for a schema-less list
+    /// (still fully supported: such a list answers GET …/schema with
+    /// <c>fields: []</c> and accepts arbitrary, even nested, keys — verified live
+    /// 2026-09-16) and stays available on a schema'd one for orphaned keys and
+    /// anything the typed form can't express.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowTypedRowEditor))]
+    [NotifyPropertyChangedFor(nameof(ShowRawJsonRowEditor))]
+    [NotifyPropertyChangedFor(nameof(RowEditorModeNote))]
+    private bool useRawJsonRowEditor;
+
     public bool IsEditingRow => EditingRow is not null;
+
+    public bool HasSchema => SelectedSchema is { HasFields: true };
+
+    public bool ShowTypedRowEditor => HasSchema && !UseRawJsonRowEditor;
+
+    public bool ShowRawJsonRowEditor => !ShowTypedRowEditor;
+
+    public string RowEditorModeNote => HasSchema
+        ? "This list has columns, so rows are edited through typed fields."
+        : "This list has no columns — rows are freeform JSON. Add columns to get a typed form.";
 
     private static readonly JsonSerializerOptions RowEditJsonOptions = new() { WriteIndented = true };
 
@@ -72,21 +103,43 @@ public partial class ListsViewModel : ObservableObject
     /// </summary>
     public ListColumnEditorViewModel ColumnEditor { get; }
 
+    /// <summary>The typed row form (#21), generated from <see cref="SelectedSchema"/>.</summary>
+    public ListRowEditorViewModel RowEditor { get; }
+
     public ListsViewModel(SessionService session)
     {
         _session = session;
         ColumnEditor = new ListColumnEditorViewModel(session);
         ColumnEditor.Saved += OnColumnsSaved;
+        RowEditor = new ListRowEditorViewModel(session);
+        RowEditor.Saved += OnRowSaved;
     }
 
     /// <summary>
     /// A column save can rename the list (only on the destructive rebuild, but
-    /// the editor owns that decision), so re-read the browser afterwards.
+    /// the editor owns that decision) and always changes the shape of the row
+    /// form, so re-read the browser and the schema afterwards.
     /// </summary>
     private void OnColumnsSaved(object? sender, EventArgs e)
     {
         if (ColumnEditor.IsNewListMode) return;
-        _ = LoadListsAsync();
+        _ = ReloadAfterColumnsSavedAsync();
+    }
+
+    private async Task ReloadAfterColumnsSavedAsync()
+    {
+        await LoadListsAsync();
+        if (SelectedList is { } list && !IsViewingShared)
+        {
+            await LoadSchemaAsync(list.Id);
+            await LoadRowsAsync(list.Id);
+        }
+    }
+
+    private void OnRowSaved(object? sender, EventArgs e)
+    {
+        var listId = IsViewingShared ? SelectedSharedList?.Id : SelectedList?.Id;
+        if (listId is { Length: > 0 } id) _ = LoadRowsAsync(id);
     }
 
     [RelayCommand]
@@ -209,6 +262,10 @@ public partial class ListsViewModel : ObservableObject
         SelectedList = list;
         WatcherSearchQuery = "";
         WatcherSearchResults.Clear();
+        RowEditor.Cancel();
+        EditingRow = null;
+        EditRowJson = "";
+        await LoadSchemaAsync(list.Id);
         await LoadRowsAsync(list.Id);
         await LoadShareLinksAsync(list.Id);
         await LoadWatchersAsync(list.Id);
@@ -226,6 +283,8 @@ public partial class ListsViewModel : ObservableObject
         Watchers.Clear();
         WatcherSearchResults.Clear();
         WatcherSearchQuery = "";
+        RowEditor.Cancel();
+        await LoadSchemaAsync(watched.Id);
         await LoadRowsAsync(watched.Id);
     }
 
@@ -359,16 +418,42 @@ public partial class ListsViewModel : ObservableObject
         }
     }
 
+    /// <summary>
+    /// Read the list's columns, which is what the typed row form is generated
+    /// from. A list with none answers <c>fields: []</c> — a normal state, not an
+    /// error — and the view falls back to the raw-JSON editor.
+    /// </summary>
+    private async Task LoadSchemaAsync(string listId)
+    {
+        try
+        {
+            var schema = await _session.Api.GetListSchemaAsync(listId);
+            SelectedSchema = schema.HasFields ? schema : null;
+        }
+        catch (ListSchemaException)
+        {
+            SelectedSchema = null;
+        }
+        catch (InterlinedApiException)
+        {
+            // A shared list may not expose its schema to a watcher; freeform is
+            // the honest fallback rather than an error banner over the rows.
+            SelectedSchema = null;
+        }
+    }
+
     private async Task LoadRowsAsync(string listId)
     {
         IsLoadingRows = true;
         try
         {
-            var page = await _session.Api.GetListDataAsync(listId, limit: PageSize, offset: 0);
+            // GetListRowsAsync, not GetListDataAsync: the endpoint omits each
+            // row's listId, which the strict model still requires (#144/PR #146).
+            var rows = await _session.Api.GetListRowsAsync(listId, limit: PageSize, offset: 0);
 
             Rows.Clear();
-            foreach (var row in page.Rows)
-                Rows.Add(row);
+            foreach (var row in rows)
+                Rows.Add(ListRowViewModel.Create(row, SelectedSchema));
 
             ErrorMessage = null;
         }
@@ -384,6 +469,7 @@ public partial class ListsViewModel : ObservableObject
 
     private bool CanAddRow() => SelectedList is not null && !string.IsNullOrWhiteSpace(NewRowJson);
 
+    /// <summary>Raw-JSON add — the schema-less path, and the escape hatch.</summary>
     [RelayCommand(CanExecute = nameof(CanAddRow))]
     private async Task AddRowAsync()
     {
@@ -408,18 +494,49 @@ public partial class ListsViewModel : ObservableObject
             RowErrorMessage = null;
             await LoadRowsAsync(list.Id);
         }
+        catch (ListRowValidationException ex)
+        {
+            RowErrorMessage = ex.Message;
+        }
         catch (InterlinedApiException ex)
         {
             RowErrorMessage = ex.Message;
         }
     }
 
-    [RelayCommand]
-    private void StartEditRow(ListDataRow row)
+    private bool CanOpenTypedRowForm() => SelectedList is not null && HasSchema;
+
+    /// <summary>Open the typed form for a new row (defaults pre-filled).</summary>
+    [RelayCommand(CanExecute = nameof(CanOpenTypedRowForm))]
+    private void StartAddRow()
     {
-        EditingRow = row;
-        EditRowJson = JsonSerializer.Serialize(row.RowData, RowEditJsonOptions);
+        if (SelectedList is not { } list || SelectedSchema is not { } schema) return;
+        EditingRow = null;
+        EditRowJson = "";
         RowErrorMessage = null;
+        RowEditor.StartAdd(list.Id, schema);
+    }
+
+    /// <summary>
+    /// Edit a row: through the typed form when the list has columns, through the
+    /// JSON box otherwise (or when the hatch is switched on).
+    /// </summary>
+    [RelayCommand]
+    private void StartEditRow(ListRowViewModel row)
+    {
+        RowErrorMessage = null;
+
+        if (ShowTypedRowEditor && SelectedList is { } list && SelectedSchema is { } schema)
+        {
+            EditingRow = null;
+            EditRowJson = "";
+            RowEditor.StartEdit(list.Id, schema, row.Row);
+            return;
+        }
+
+        RowEditor.Cancel();
+        EditingRow = row;
+        EditRowJson = JsonSerializer.Serialize(row.Row.RowData, RowEditJsonOptions);
     }
 
     [RelayCommand]
@@ -454,6 +571,10 @@ public partial class ListsViewModel : ObservableObject
             RowErrorMessage = null;
             await LoadRowsAsync(list.Id);
         }
+        catch (ListRowValidationException ex)
+        {
+            RowErrorMessage = ex.Message;
+        }
         catch (InterlinedApiException ex)
         {
             RowErrorMessage = ex.Message;
@@ -461,12 +582,17 @@ public partial class ListsViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private async Task DeleteRowAsync(ListDataRow row)
+    private async Task DeleteRowAsync(ListRowViewModel row)
     {
         if (SelectedList is not { } list) return;
         try
         {
             await _session.Api.DeleteListRowAsync(list.Id, row.Id);
+            if (EditingRow == row)
+            {
+                EditingRow = null;
+                EditRowJson = "";
+            }
             await LoadRowsAsync(list.Id);
         }
         catch (InterlinedApiException ex)
@@ -477,9 +603,12 @@ public partial class ListsViewModel : ObservableObject
 
     partial void OnNewListTitleChanged(string value) => CreateListCommand.NotifyCanExecuteChanged();
 
+    partial void OnSelectedSchemaChanged(ListSchema? value) => StartAddRowCommand.NotifyCanExecuteChanged();
+
     partial void OnSelectedListChanged(ListSummary? value)
     {
         AddRowCommand.NotifyCanExecuteChanged();
+        StartAddRowCommand.NotifyCanExecuteChanged();
         CreateShareLinkCommand.NotifyCanExecuteChanged();
         SearchWatcherUsersCommand.NotifyCanExecuteChanged();
         AddWatcherCommand.NotifyCanExecuteChanged();
