@@ -1,0 +1,167 @@
+<UserControl x:Class="InterlinedList.Views.GitHubListHeader"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:InterlinedList.Views"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d"
+             d:DesignWidth="700">
+
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
+        <local:NullOrEmptyToVisibilityConverter x:Key="NullOrEmptyToVisibility"/>
+
+        <Style x:Key="HeaderSmallBtnStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="10,3"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="3"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- The repo link itself: a hyperlink-looking Button, because this opens the
+             OS browser rather than navigating anything in-app. -->
+        <Style x:Key="RepoLinkBtnStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource LinkBrush}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontFamily" Value="JetBrains Mono, Consolas"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <TextBlock x:Name="Label"
+                                   Text="{TemplateBinding Content}"
+                                   Foreground="{TemplateBinding Foreground}"
+                                   FontSize="{TemplateBinding FontSize}"
+                                   FontFamily="{TemplateBinding FontFamily}"
+                                   TextTrimming="CharacterEllipsis"/>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Label" Property="TextDecorations" Value="Underline"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <!-- Whole strip collapses for a local list, so it can be hosted
+         unconditionally and costs nothing when it doesn't apply. -->
+    <Border Background="{DynamicResource Surface2Brush}"
+            BorderBrush="{DynamicResource BorderBrush}"
+            BorderThickness="1"
+            CornerRadius="4"
+            Padding="12,10"
+            Margin="0,0,0,12"
+            Visibility="{Binding IsGitHubBacked, Converter={StaticResource BoolToVisibility}}">
+        <StackPanel>
+
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- owner/repo issues — the link the web app puts under the list name. -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                    <local:GitHubMark Width="13" Height="13"
+                                      VerticalAlignment="Center"
+                                      Margin="0,0,6,0"
+                                      Foreground="{DynamicResource TextBodyBrush}"/>
+                    <Button Content="{Binding RepoLinkLabel}"
+                            Command="{Binding OpenRepoIssuesCommand}"
+                            Style="{StaticResource RepoLinkBtnStyle}"
+                            VerticalAlignment="Center"
+                            ToolTip="Open this repository's issues on GitHub"/>
+
+                    <!-- Private repo tag. Amber because it is a caution, not an
+                         error — and it appears ONLY on an explicit
+                         githubRepoPrivate: true. A null renders nothing at all,
+                         never "public". -->
+                    <Border Background="{DynamicResource Surface3Brush}"
+                            BorderBrush="{DynamicResource AmberBrush}"
+                            BorderThickness="1"
+                            CornerRadius="3"
+                            Padding="5,1"
+                            Margin="8,0,0,0"
+                            VerticalAlignment="Center"
+                            ToolTip="{Binding PrivateTagExplanation}"
+                            Visibility="{Binding ShowPrivateRepoTag, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock Text="Private repo"
+                                   FontSize="10"
+                                   FontFamily="JetBrains Mono, Consolas"
+                                   Foreground="{DynamicResource AmberBrush}"/>
+                    </Border>
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="Refreshing…"
+                               FontSize="11"
+                               VerticalAlignment="Center"
+                               Margin="0,0,8,0"
+                               Foreground="{DynamicResource TextMutedBrush}"
+                               Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}"/>
+                    <Button Content="Refresh from GitHub"
+                            Command="{Binding RefreshCommand}"
+                            Style="{StaticResource HeaderSmallBtnStyle}"/>
+                </StackPanel>
+            </Grid>
+
+            <!-- Why the tag matters: repository access is not list visibility. Shown
+                 as body copy rather than hidden in the tooltip, since the whole
+                 point of the tag is this distinction. -->
+            <TextBlock Text="{Binding PrivateTagExplanation}"
+                       FontSize="11"
+                       Foreground="{DynamicResource TextMutedBrush}"
+                       TextWrapping="Wrap"
+                       Margin="0,6,0,0"
+                       Visibility="{Binding ShowPrivateRepoTag, Converter={StaticResource BoolToVisibility}}"/>
+
+            <!-- The third state: visibility never recorded. No tag, and a reason. -->
+            <TextBlock Text="{Binding RepoVisibilityLine}"
+                       FontSize="11"
+                       Foreground="{DynamicResource TextMutedBrush}"
+                       TextWrapping="Wrap"
+                       Margin="0,6,0,0"
+                       Visibility="{Binding VisibilityUnrecorded, Converter={StaticResource BoolToVisibility}}"/>
+
+            <TextBlock Text="{Binding StatusMessage}"
+                       FontSize="11"
+                       Foreground="{DynamicResource PrimaryBrush}"
+                       TextWrapping="Wrap"
+                       Margin="0,6,0,0"
+                       Visibility="{Binding StatusMessage, Converter={StaticResource NullOrEmptyToVisibility}}"/>
+
+            <TextBlock Text="{Binding ErrorMessage}"
+                       Foreground="#FFE81123"
+                       FontSize="11"
+                       TextWrapping="Wrap"
+                       Margin="0,6,0,0"
+                       Visibility="{Binding ErrorMessage, Converter={StaticResource NullOrEmptyToVisibility}}"/>
+        </StackPanel>
+    </Border>
+</UserControl>
