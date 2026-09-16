@@ -415,6 +415,32 @@ three real, non-obvious issues surfaced and are fixed in the current state
 3. `TargetPlatformVersion` in the `.wapproj` must match an SDK actually
    installed on the runner (see above) — it drifts as GitHub updates runner
    images, so a future image update could reintroduce this failure.
+4. **`InterlinedList.Sync.Core.csproj` needs `<RuntimeIdentifiers>win-x64</RuntimeIdentifiers>`
+   too** — it was the only project in the reference chain missing it, and the
+   MSIX nested publish failed with `NETSDK1047` ("Assets file … doesn't have a
+   target for 'net10.0/win-x64'"). Same root cause as item 2, and a platform-
+   neutral `TargetFramework` does **not** exempt a project from needing the RID
+   declared: the RID must be present at *restore* time, and passing `-r win-x64`
+   on the CLI is not enough.
+5. **A non-entry-point `ProjectReference` lands in a SUBFOLDER of the MSIX
+   payload, so `Package.appxmanifest` must say
+   `Executable="InterlinedList.Sync\InterlinedList.Sync.exe"`, not the bare
+   filename** (`APPX0703` otherwise). Desktop Bridge flattens only the
+   entry-point project (`EntryPointProjectUniqueName`) to the package root;
+   everything else is harvested under a folder named after the project:
+   ```
+   InterlinedList.exe      -> …\bin\x64\Release\InterlinedList\InterlinedList.exe
+   InterlinedList.Sync.exe -> …\bin\x64\Release\InterlinedList.Sync\InterlinedList.Sync.exe
+   ```
+   **This is the one place the two packaging tracks legitimately disagree:** the
+   MSI publishes both projects into the *same* folder and WiX globs it, so a
+   bare filename is correct there. Don't "tidy" the MSIX subdirectory away.
+
+**Both 4 and 5 were latent for six weeks.** The `InterlinedList.Sync*` projects
+existed only on a local `main` that had never been pushed, so **CI had never
+once built the MSIX half of the sync feature** — it was written, documented here
+as working, and never exercised. If you add a project, push it, and check that
+all three CI jobs actually ran against it.
 
 **Releases** — `.github/workflows/release.yml` triggers on a pushed `v*` tag
 (e.g. `git tag v1.0.0 && git push origin v1.0.0`). It runs the same
