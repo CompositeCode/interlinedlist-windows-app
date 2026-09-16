@@ -169,6 +169,7 @@
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>  <!-- Header -->
+            <RowDefinition Height="Auto"/>  <!-- Account-status banner -->
             <RowDefinition Height="Auto"/>  <!-- Error banner -->
             <RowDefinition Height="*"/>     <!-- Sections -->
         </Grid.RowDefinitions>
@@ -193,8 +194,106 @@
             </Grid>
         </Border>
 
-        <!-- Error banner -->
+        <!-- ============ Account-status banner (#50) ============ -->
+        <!-- The web puts this at the top of the home page. MainWindow is the
+             equivalent home here, but it's in flight (#149), so it lands at the
+             top of Settings for now — same block, different host. Amber for
+             probation (recoverable), the view's existing #FFE81123 error red for
+             restricted/suspended/banned. -->
         <Border Grid.Row="1"
+                BorderThickness="0,0,0,1"
+                Padding="20,12"
+                Visibility="{Binding AccountStatus.IsVisible, Converter={StaticResource BoolToVisibility}, FallbackValue=Collapsed}">
+            <Border.Style>
+                <Style TargetType="Border">
+                    <!-- Danger is the safer default: an unknown status must not
+                         read as a mild, recoverable one. -->
+                    <Setter Property="Background" Value="#1AE81123"/>
+                    <Setter Property="BorderBrush" Value="#66E81123"/>
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding AccountStatus.Severity}" Value="warning">
+                            <Setter Property="Background" Value="#1AF0A830"/>
+                            <Setter Property="BorderBrush" Value="#66F0A830"/>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- 4px status edge, same vocabulary as the post cards -->
+                <Border Grid.Column="0" Width="4" CornerRadius="3" Margin="0,0,12,0">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Background" Value="#FFE81123"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding AccountStatus.Severity}" Value="warning">
+                                    <Setter Property="Background" Value="{StaticResource AmberBrush}"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                </Border>
+
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding AccountStatus.Headline}"
+                               FontSize="14" FontWeight="SemiBold"
+                               TextWrapping="Wrap">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="#FFE81123"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding AccountStatus.Severity}" Value="warning">
+                                        <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+
+                    <TextBlock Text="{Binding AccountStatus.Detail}"
+                               FontSize="12"
+                               Foreground="{DynamicResource TextBodyBrush}"
+                               TextWrapping="Wrap"
+                               Margin="0,4,0,0"/>
+
+                    <!-- Name what's locked, so nothing fails on click unexplained. -->
+                    <TextBlock Text="{Binding AccountStatus.LockedFeatures, StringFormat='Locked: {0}'}"
+                               Style="{StaticResource MonoMetaStyle}"
+                               TextWrapping="Wrap"
+                               Margin="0,6,0,0"
+                               Visibility="{Binding AccountStatus.HasLockedFeatures, Converter={StaticResource BoolToVisibility}}"/>
+                </StackPanel>
+
+                <Button Grid.Column="2"
+                        Content="{Binding AccountStatus.ActionLabel}"
+                        Command="{Binding OpenAccountStatusActionCommand}"
+                        VerticalAlignment="Center"
+                        Margin="12,0,0,0"
+                        Visibility="{Binding AccountStatus.ActionLabel, Converter={StaticResource NullOrEmptyToVisibility}}">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource DigBtnStyle}">
+                            <Setter Property="BorderBrush" Value="#FFE81123"/>
+                            <Setter Property="Foreground" Value="#FFE81123"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding AccountStatus.Severity}" Value="warning">
+                                    <Setter Property="BorderBrush" Value="{StaticResource AmberBrush}"/>
+                                    <Setter Property="Foreground" Value="{StaticResource AmberBrush}"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
+            </Grid>
+        </Border>
+
+        <!-- Error banner -->
+        <Border Grid.Row="2"
                 Background="#1AE81123"
                 Padding="20,8">
             <Border.Style>
@@ -214,7 +313,7 @@
         </Border>
 
         <!-- Sections -->
-        <ScrollViewer Grid.Row="2"
+        <ScrollViewer Grid.Row="3"
                       VerticalScrollBarVisibility="Auto"
                       HorizontalScrollBarVisibility="Disabled"
                       Padding="20,16">
