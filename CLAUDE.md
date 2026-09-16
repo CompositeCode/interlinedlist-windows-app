@@ -212,6 +212,40 @@ small per-tag cache in `_views`), **Accounts** (Connected Accounts),
 cards open a profile in the People tab via the `Navigator` hub
 (`Services/Navigator.cs`) → `MainWindow.OpenProfile`.
 
+### Re-capturing wire shapes when the API moves
+
+The models in `Models/` are hand-written against **real captured payloads**, not
+against the OpenAPI spec (whose `description` fields are mostly empty and whose
+schemas omit fields the server actually sends). When a model looks wrong, capture
+a fresh payload rather than guessing:
+
+```sh
+set -a; source .env; set +a
+TOK=$(curl -s -X POST https://interlinedlist.com/api/auth/sync-token \
+  -H 'Content-Type: application/json' \
+  -d "{\"email\":\"$INTERLINEDLIST_EMAIL\",\"password\":\"$INTERLINEDLIST_PASSWORD\"}" \
+  | python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])')
+
+# Sample BROADLY — the interesting fields are null on most rows.
+curl -s "https://interlinedlist.com/api/messages?limit=80" -H "Authorization: Bearer $TOK" > m80.json
+```
+
+Three gotchas that have each cost real time:
+
+1. **`limit=1` lies.** `linkMetadata`, `crossPostUrls`, `pushedMessage` and
+   `replyCounts` are null on most messages. An 80-row sample was needed before
+   `pushedMessage` appeared at all (5 of 80). Take the union of keys across a
+   large sample, not the keys of row zero.
+2. **Message content contains raw control characters**, so Python's strict JSON
+   parser rejects the feed. Use `json.loads(text, strict=False)` when inspecting.
+3. **Verify the model, don't eyeball it.** A throwaway `net10.0` console project
+   that `<Compile Include>`s the `Models/*.cs` files and deserializes the
+   captured JSON will run on macOS (the models only need `System.Text.Json`,
+   unlike the WPF project). That is how the field set here was confirmed — it
+   catches a silently-unmapped property, which eyeballing does not. Note
+   `_count` needs an explicit `[JsonPropertyName]`; a leading underscore does
+   not survive camelCase matching.
+
 ## Packaging & distribution
 
 Two independent, parallel packaging tracks — both wrap the same
