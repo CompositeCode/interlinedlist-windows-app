@@ -19,6 +19,7 @@ public partial class MessageItemViewModel : ObservableObject
     private readonly InterlinedApiClient _api;
     private readonly string? _currentUserId;
     private readonly bool _publiclyVisible;
+    private readonly bool _showLinkPreviews;
 
     public string Id { get; }
     public string TimeFormatted { get; }
@@ -42,6 +43,15 @@ public partial class MessageItemViewModel : ObservableObject
     /// </summary>
     public IReadOnlyList<string> Tags { get; }
     public bool HasTags => Tags.Count > 0;
+
+    /// <summary>
+    /// Unfurled link cards, from the <c>linkMetadata</c> that arrives inline on
+    /// the feed — no extra request. Empty when the viewer has previews switched
+    /// off (<c>GET /api/user</c> → <c>showPreviews</c>) or when every unfurl for
+    /// this message failed.
+    /// </summary>
+    public IReadOnlyList<LinkPreviewViewModel> LinkPreviews { get; }
+    public bool HasLinkPreviews => LinkPreviews.Count > 0;
 
     public ObservableCollection<MessageItemViewModel> Replies { get; } = new();
 
@@ -132,11 +142,19 @@ public partial class MessageItemViewModel : ObservableObject
     [ObservableProperty]
     private string? errorMessage;
 
-    public MessageItemViewModel(Message message, InterlinedApiClient api, string? currentUserId)
+    /// <param name="showLinkPreviews">
+    /// The viewer's <c>showPreviews</c> preference. Defaults to <c>false</c> —
+    /// off unless a caller opts in — so a surface that hasn't been taught about
+    /// the preference can't accidentally render previews against the user's
+    /// wishes. <see cref="FeedViewModel"/> passes the real value; other callers
+    /// (e.g. a profile's message list) currently keep the default.
+    /// </param>
+    public MessageItemViewModel(Message message, InterlinedApiClient api, string? currentUserId, bool showLinkPreviews = false)
     {
         _api = api;
         _currentUserId = currentUserId;
         _publiclyVisible = message.PubliclyVisible;
+        _showLinkPreviews = showLinkPreviews;
 
         Id = message.Id;
         content = message.Content;
@@ -149,6 +167,9 @@ public partial class MessageItemViewModel : ObservableObject
         ImageUrls = message.ImageUrls ?? new List<string>();
         VideoUrls = message.VideoUrls ?? new List<string>();
         Tags = message.Tags ?? new List<string>();
+        LinkPreviews = showLinkPreviews
+            ? message.LinkMetadata.SuccessfulLinks().Select(l => new LinkPreviewViewModel(l)).ToList()
+            : new List<LinkPreviewViewModel>();
 
         digCount = message.DigCount;
         pushCount = message.PushCount;
@@ -368,7 +389,7 @@ public partial class MessageItemViewModel : ObservableObject
             var replies = await _api.GetRepliesAsync(Id);
             Replies.Clear();
             foreach (var reply in replies)
-                Replies.Add(new MessageItemViewModel(reply, _api, _currentUserId));
+                Replies.Add(new MessageItemViewModel(reply, _api, _currentUserId, _showLinkPreviews));
             AreRepliesVisible = true;
         }
         catch (InterlinedApiException ex)
@@ -401,7 +422,7 @@ public partial class MessageItemViewModel : ObservableObject
             var replies = await _api.GetRepliesAsync(Id);
             Replies.Clear();
             foreach (var reply in replies)
-                Replies.Add(new MessageItemViewModel(reply, _api, _currentUserId));
+                Replies.Add(new MessageItemViewModel(reply, _api, _currentUserId, _showLinkPreviews));
             AreRepliesVisible = true;
         }
         catch (InterlinedApiException ex)
