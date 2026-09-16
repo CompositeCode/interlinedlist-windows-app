@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using InterlinedList.Models;
 using InterlinedList.Services;
 
 namespace InterlinedList.ViewModels;
@@ -19,6 +20,22 @@ public partial class NotificationsViewModel : ObservableObject
 
     [ObservableProperty]
     private string? errorMessage;
+
+    /// <summary>
+    /// Dig/push totals received on the user's own messages. Null until loaded,
+    /// or when the endpoint is unavailable — the rail hides the strip rather
+    /// than showing zeros that might not be zeros.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasEngagement))]
+    [NotifyPropertyChangedFor(nameof(EngagementSummary))]
+    private UserEngagement? engagement;
+
+    public bool HasEngagement => Engagement is not null;
+
+    public string EngagementSummary => Engagement is { } e
+        ? $"{e.TotalDigs} Digs · {e.TotalPushes} Pushes on your posts"
+        : string.Empty;
 
     public NotificationsViewModel(SessionService session)
     {
@@ -47,6 +64,19 @@ public partial class NotificationsViewModel : ObservableObject
         finally
         {
             IsLoading = false;
+        }
+
+        // Separate try: engagement is supplementary, so a failure here must not
+        // blank the notification list or surface as the rail's error. It is also
+        // the endpoint CLAUDE.md wrongly recorded as 401-only, so treat an
+        // unexpected failure as "just don't show it".
+        try
+        {
+            Engagement = await _session.Api.GetEngagementAsync();
+        }
+        catch (InterlinedApiException)
+        {
+            Engagement = null;
         }
     }
 
