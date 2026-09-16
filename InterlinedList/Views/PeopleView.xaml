@@ -434,7 +434,7 @@
                                             </DockPanel>
 
                                             <!-- Body -->
-                                            <TextBlock Text="{Binding Content}"
+                                            <TextBlock local:MentionText.Text="{Binding Content}"
                                                        FontSize="13"
                                                        Foreground="{DynamicResource TextBodyBrush}"
                                                        TextWrapping="Wrap"
