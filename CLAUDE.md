@@ -200,6 +200,23 @@ ignores preferences set on the web; `Models/Message.cs` drops 9 live fields;
    as bearer-OK on 2026-09-15. Two full rounds of corrections have now been
    needed here, so treat the list below as a dated snapshot, not a rule.
 
+   **⚠️ `POST /api/auth/logout` does NOT invalidate a bearer sync-token.**
+   Probed live 2026-09-16 (#114): it returns `200 {"message":"Logged out
+   successfully","remaining":0}` — and returns exactly that **with no
+   `Authorization` header at all**. The spec agrees: `x-auth-type: "none"`,
+   `security: []`. After five logout calls the same token still returned `200`
+   from `GET /api/user`, and its row stayed in `GET /api/user/sessions` with a
+   freshly bumped `lastUsedAt`. `remaining` counts *cookie* sessions, always 0
+   for a native client.
+   The real revoke is `DELETE /api/user/sessions/{id}` (`204`, after which the
+   token 401s and its row disappears) — but exactly one row comes back
+   `isCurrent: true`, and deleting that one returns
+   `400 {"error":"cannot_revoke_current_session"}`. **So a native bearer client
+   structurally cannot invalidate its own token.** Destroying `session.dat` is
+   therefore sign-out's only real guarantee, which is why `ClearToken()`
+   overwrites before deleting. The stale-token pile on the test account is now
+   **1,283** (it was 502 on 2026-07-31) — a concrete consequence.
+
    **Cookie-session-only, confirmed live 2026-09-15** (a native bearer-token
    client structurally cannot get a cookie session, so these are browser-handoff
    or out of scope): `GET /api/auth/accounts`, `POST /api/auth/switch`,
