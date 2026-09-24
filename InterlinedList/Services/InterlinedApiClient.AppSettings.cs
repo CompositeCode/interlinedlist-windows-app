@@ -593,24 +593,12 @@ public sealed partial class InterlinedApiClient
                 ? $"App-settings write rate limit reached; retry in {wait.TotalSeconds:N0}s."
                 : "App-settings write rate limit reached (~60 writes/min per app); retry shortly.");
 
-    private static TimeSpan? ReadRetryAfter(HttpResponseMessage resp)
-    {
-        var header = resp.Headers.RetryAfter;
-        if (header?.Delta is { } delta)
-            return delta;
-        if (header?.Date is { } date)
-        {
-            var remaining = date - DateTimeOffset.UtcNow;
-            return remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero;
-        }
-        return null;
-    }
-
-    private static string? ReadHeader(HttpResponseMessage resp, string name)
-        => resp.Headers.TryGetValues(name, out var values) ? values.FirstOrDefault() : null;
-
-    private static int? ReadIntHeader(HttpResponseMessage resp, string name)
-        => int.TryParse(ReadHeader(resp, name), out var value) ? value : null;
+    // ReadRetryAfter / ReadHeader / ReadIntHeader intentionally live in
+    // InterlinedApiClient.cs, not here. This file and that one are the SAME
+    // partial class, so defining them in both is CS0111 — which is exactly what
+    // happened when #130 and #140 were developed in parallel and merged: git
+    // saw no conflict (different files), the compiler did. If you need another
+    // header reader, add it there.
 
     private static void ValidateAppKey(string appKey)
     {
