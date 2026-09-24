@@ -16,6 +16,14 @@ public enum LoginMode
     /// can't log in until it succeeds.
     /// </summary>
     ResetPassword,
+
+    /// <summary>
+    /// Completing email verification, or confirming/undoing an email change, with
+    /// the token from the relevant email. One mode covers all three because all
+    /// three endpoints are unauthenticated and take nothing but <c>{ token }</c> —
+    /// the user picks the action matching the email they received.
+    /// </summary>
+    VerifyEmail,
 }
 
 public partial class LoginViewModel : ObservableObject
@@ -34,6 +42,45 @@ public partial class LoginViewModel : ObservableObject
     /// <summary>The token pasted out of the password-reset email (bare, or the whole link).</summary>
     [ObservableProperty]
     private string resetToken = "";
+
+    /// <summary>The token pasted out of a verification / email-change email.</summary>
+    [ObservableProperty]
+    private string verificationToken = "";
+
+    /// <summary>
+    /// A new address awaiting confirmation, from <c>pendingEmail</c> on
+    /// <c>GET /api/user</c>. Null when nothing is in flight — or when there's no
+    /// session to read it with, which is why <see cref="EmailStandingKnown"/>
+    /// exists separately.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasPendingEmail))]
+    [NotifyPropertyChangedFor(nameof(ShowEmailChangeActions))]
+    [NotifyPropertyChangedFor(nameof(PendingEmailSummary))]
+    private string? pendingEmail;
+
+    /// <summary>
+    /// True once <c>GET /api/user</c> has actually been read. Distinguishes
+    /// "no change is pending" from "we have no session, so we can't tell" —
+    /// without it the confirm/undo buttons would be hidden from exactly the
+    /// signed-out user who needs them.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowEmailChangeActions))]
+    [NotifyPropertyChangedFor(nameof(PendingEmailSummary))]
+    private bool emailStandingKnown;
+
+    /// <summary>
+    /// <c>accountStatus</c> from <c>GET /api/user</c> — <c>new</c> until the
+    /// account is cleared, which is what verification is the fastest route out of.
+    /// Re-read after every successful verification so it can't go stale.
+    /// </summary>
+    [ObservableProperty]
+    private string? accountStatus;
+
+    /// <summary><c>emailVerified</c> from <c>GET /api/user</c>.</summary>
+    [ObservableProperty]
+    private bool emailVerified;
 
     /// <summary>A failure. Rendered in the error color.</summary>
     [ObservableProperty]
@@ -57,9 +104,13 @@ public partial class LoginViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(ToggleModeText))]
     [NotifyPropertyChangedFor(nameof(IsRegisterMode))]
     [NotifyPropertyChangedFor(nameof(IsResetPasswordMode))]
+    [NotifyPropertyChangedFor(nameof(IsVerifyEmailMode))]
     [NotifyPropertyChangedFor(nameof(ShowRegisterFields))]
     [NotifyPropertyChangedFor(nameof(ShowResetFields))]
+    [NotifyPropertyChangedFor(nameof(ShowVerifyFields))]
+    [NotifyPropertyChangedFor(nameof(ShowEmailChangeActions))]
     [NotifyPropertyChangedFor(nameof(ShowPasswordField))]
+    [NotifyPropertyChangedFor(nameof(ShowEmailField))]
     [NotifyPropertyChangedFor(nameof(ShowForgotLink))]
     [NotifyPropertyChangedFor(nameof(ShowToggleMode))]
     [NotifyPropertyChangedFor(nameof(ShowBackToLogin))]
@@ -67,24 +118,47 @@ public partial class LoginViewModel : ObservableObject
 
     public bool IsRegisterMode => Mode == LoginMode.Register;
     public bool IsResetPasswordMode => Mode == LoginMode.ResetPassword;
+    public bool IsVerifyEmailMode => Mode == LoginMode.VerifyEmail;
 
     public bool HasError => !string.IsNullOrEmpty(ErrorMessage);
     public bool HasStatus => !string.IsNullOrEmpty(StatusMessage);
+    public bool HasPendingEmail => !string.IsNullOrEmpty(PendingEmail);
 
     public bool ShowRegisterFields => Mode == LoginMode.Register;
     public bool ShowResetFields => Mode == LoginMode.ResetPassword;
+    public bool ShowVerifyFields => Mode == LoginMode.VerifyEmail;
+
+    /// <summary>
+    /// The confirm/undo pair, driven by <c>pendingEmail</c> as the issue requires:
+    /// hidden only when we've actually read <c>GET /api/user</c> and it says no
+    /// change is pending. With no session we can't know, and the endpoints work on
+    /// the emailed token alone, so they stay available.
+    /// </summary>
+    public bool ShowEmailChangeActions
+        => Mode == LoginMode.VerifyEmail && (!EmailStandingKnown || HasPendingEmail);
 
     /// <summary>The single password box. Reset mode has its own new/confirm pair instead.</summary>
-    public bool ShowPasswordField => Mode != LoginMode.ResetPassword;
+    public bool ShowPasswordField => Mode is LoginMode.Login or LoginMode.Register;
+
+    /// <summary>Verification needs nothing but the token, so the email box is noise there.</summary>
+    public bool ShowEmailField => Mode != LoginMode.VerifyEmail;
 
     public bool ShowForgotLink => Mode == LoginMode.Login;
     public bool ShowToggleMode => Mode is LoginMode.Login or LoginMode.Register;
-    public bool ShowBackToLogin => Mode == LoginMode.ResetPassword;
+    public bool ShowBackToLogin => Mode is LoginMode.ResetPassword or LoginMode.VerifyEmail;
+
+    public string PendingEmailSummary
+        => HasPendingEmail
+            ? $"A change to {PendingEmail} is awaiting confirmation."
+            : EmailStandingKnown
+                ? "No email change is pending on this account."
+                : "Paste the token from the email, then pick the matching action.";
 
     public string HeadingText => Mode switch
     {
         LoginMode.Register => "Create an InterlinedList account",
         LoginMode.ResetPassword => "Set a new password",
+        LoginMode.VerifyEmail => "Verify your email",
         _ => "Log in to InterlinedList",
     };
 
@@ -92,6 +166,7 @@ public partial class LoginViewModel : ObservableObject
     {
         LoginMode.Register => "Create account",
         LoginMode.ResetPassword => "Set new password",
+        LoginMode.VerifyEmail => "Verify email",
         _ => "Log In",
     };
 
@@ -109,6 +184,15 @@ public partial class LoginViewModel : ObservableObject
         Mode = target;
         ErrorMessage = null;
         StatusMessage = null;
+
+        if (target != LoginMode.VerifyEmail)
+        {
+            VerificationToken = "";
+            PendingEmail = null;
+            AccountStatus = null;
+            EmailVerified = false;
+            EmailStandingKnown = false;
+        }
     }
 
     public void ToggleRegisterMode()
@@ -315,6 +399,175 @@ public partial class LoginViewModel : ObservableObject
         var end = value.IndexOfAny(['&', '#'], start);
         value = end < 0 ? value[start..] : value[start..end];
         return Uri.UnescapeDataString(value).Trim();
+    }
+
+    // ── Email verification & email-change confirmation ──────────────────────────
+    // All three endpoints are unauthenticated and take nothing but { token }, so
+    // this works from the login card with no session — which is the point: you
+    // must verify before posting or attaching media, and requiring the website
+    // for it made the app a dead end. Each success re-reads GET /api/user when a
+    // session exists, because the write responses aren't trusted.
+
+    /// <summary>
+    /// Enter verification mode and, if there's a session to read with, pull
+    /// <c>pendingEmail</c> so the confirm/undo affordances reflect reality.
+    /// </summary>
+    public async Task GoToVerifyEmailModeAsync()
+    {
+        GoToMode(LoginMode.VerifyEmail);
+        // No status line here: PendingEmailSummary is already bound under the token
+        // box, and saying the same thing twice reads as two separate messages.
+        await RefreshEmailStandingAsync();
+    }
+
+    /// <summary>
+    /// Re-read <c>GET /api/user</c>. Needs a bearer token, unlike the verify calls
+    /// themselves, so it no-ops while signed out and leaves
+    /// <see cref="EmailStandingKnown"/> false.
+    /// </summary>
+    public async Task RefreshEmailStandingAsync()
+    {
+        if (!_session.IsAuthenticated)
+        {
+            EmailStandingKnown = false;
+            PendingEmail = null;
+            return;
+        }
+
+        try
+        {
+            var (user, standing) = await _session.Api.GetUserAndEmailStandingAsync();
+            PendingEmail = standing.PendingEmail;
+            AccountStatus = standing.AccountStatus;
+            EmailVerified = standing.EmailVerified;
+            EmailStandingKnown = true;
+
+            // Keep the rest of the app honest too: CurrentUser carries
+            // emailVerified, and the whole reason to verify is that it gates
+            // posting. Reassigning it republishes to every bound view.
+            if (user is not null)
+                _session.CurrentUser = user;
+        }
+        catch (InterlinedApiException)
+        {
+            // A stale or revoked token shouldn't break the verify flow — the
+            // emailed token is all the endpoints actually need.
+            EmailStandingKnown = false;
+            PendingEmail = null;
+            AccountStatus = null;
+        }
+    }
+
+    public Task<bool> VerifyEmailAsync()
+        => RunTokenActionAsync(
+            (api, token) => api.VerifyEmailAsync(token),
+            "Paste the verification token (or the whole link) from the email.",
+            "Email verified.");
+
+    public Task<bool> ConfirmEmailChangeAsync()
+        => RunTokenActionAsync(
+            (api, token) => api.VerifyEmailChangeAsync(token),
+            "Paste the token (or the whole link) from the confirmation email.",
+            "New address confirmed.");
+
+    public Task<bool> UndoEmailChangeAsync()
+        => RunTokenActionAsync(
+            (api, token) => api.UndoEmailChangeAsync(token),
+            "Paste the token (or the whole link) from the undo email.",
+            "Email change reversed.");
+
+    /// <summary>
+    /// The three verify/undo calls differ only in endpoint and wording, so they
+    /// share one pipeline: normalize the pasted token, call, then re-read
+    /// <c>GET /api/user</c> and report the resulting standing.
+    /// </summary>
+    private async Task<bool> RunTokenActionAsync(
+        Func<InterlinedApiClient, string, Task> action,
+        string missingTokenMessage,
+        string successMessage)
+    {
+        ErrorMessage = null;
+        StatusMessage = null;
+
+        var token = NormalizeToken(VerificationToken);
+        if (token.Length == 0)
+        {
+            ErrorMessage = missingTokenMessage;
+            return false;
+        }
+
+        IsBusy = true;
+        try
+        {
+            await action(_session.Api, token);
+        }
+        catch (InterlinedApiException ex)
+        {
+            ErrorMessage = DescribeTokenFailure(ex);
+            return false;
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+
+        VerificationToken = "";
+
+        IsBusy = true;
+        try
+        {
+            await RefreshEmailStandingAsync();
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+
+        // Report what the re-read actually said, not what the call implied — the
+        // write response body is never trusted, so this is the only real evidence.
+        StatusMessage = EmailStandingKnown
+            ? $"{successMessage} Email is {(EmailVerified ? "verified" : "not yet verified")}"
+              + (string.IsNullOrEmpty(AccountStatus) ? "." : $"; account status is {AccountStatus}.")
+            : $"{successMessage} Log in to continue.";
+        return true;
+    }
+
+    private static string DescribeTokenFailure(InterlinedApiException ex)
+    {
+        if (ex.StatusCode == 429)
+            return "Too many attempts. Wait a minute and try again.";
+
+        // Undo is checked first because it's the more specific match: the undo
+        // endpoint says "Invalid or expired undo link" (no "token" in it) while its
+        // missing-field message *does* contain "token". Live-verified wording —
+        // don't collapse these two branches.
+        if (ex.StatusCode == 400 && ex.Message.Contains("undo", StringComparison.OrdinalIgnoreCase))
+            return ex.Message + " Undo links expire; if it's too late, request a new email change instead.";
+
+        if (ex.StatusCode == 400 && ex.Message.Contains("token", StringComparison.OrdinalIgnoreCase))
+            return ex.Message + " These links are single-use and time-limited — "
+                              + "make sure you pasted the newest email, or resend it from the web.";
+
+        // 409 is documented on verify-email-change and undo-email-change but was
+        // not reachable by probing (it needs a real email change in flight, which
+        // would have mutated the shared test account), so its message is surfaced
+        // as-is rather than wrapped in invented wording.
+        return ex.Message;
+    }
+
+    /// <summary>
+    /// Opens the web settings page so the user can resend their verification
+    /// email. Not an in-app call on purpose:
+    /// <c>POST /api/auth/send-verification-email</c> is cookie-session-only and
+    /// answers 401 even with a valid bearer sync token (probed live 2026-09-16),
+    /// so a native client can only hand this one off — the same pattern as OAuth
+    /// linking and "Manage account on the web".
+    /// </summary>
+    public void OpenWebVerificationSettings()
+    {
+        _session.Api.OpenWebVerificationSettings();
+        StatusMessage = "Opened InterlinedList in your browser — resend the email from Settings, "
+                      + "then paste the new token here.";
     }
 
     // ── Login ───────────────────────────────────────────────────────────────────

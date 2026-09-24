@@ -104,19 +104,21 @@
                                TextWrapping="Wrap"
                                Margin="0,0,0,20"/>
 
-                    <TextBlock Text="EMAIL"
-                               FontSize="10" FontWeight="SemiBold"
-                               Foreground="{DynamicResource TextMutedBrush}"
-                               Margin="0,0,0,4"/>
-                    <TextBox x:Name="EmailInput"
-                             Text="{Binding Email, UpdateSourceTrigger=PropertyChanged}"
-                             FontSize="13"
-                             Padding="8,6"
-                             Margin="0,0,0,14"
-                             Background="{DynamicResource Surface2Brush}"
-                             BorderBrush="{DynamicResource BorderBrush}"
-                             BorderThickness="1"
-                             Foreground="{DynamicResource TextBrush}"/>
+                    <StackPanel x:Name="EmailFields">
+                        <TextBlock Text="EMAIL"
+                                   FontSize="10" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextMutedBrush}"
+                                   Margin="0,0,0,4"/>
+                        <TextBox x:Name="EmailInput"
+                                 Text="{Binding Email, UpdateSourceTrigger=PropertyChanged}"
+                                 FontSize="13"
+                                 Padding="8,6"
+                                 Margin="0,0,0,14"
+                                 Background="{DynamicResource Surface2Brush}"
+                                 BorderBrush="{DynamicResource BorderBrush}"
+                                 BorderThickness="1"
+                                 Foreground="{DynamicResource TextBrush}"/>
+                    </StackPanel>
 
                     <!-- Registration-only fields (toggled from code-behind) -->
                     <StackPanel x:Name="RegisterFields" Visibility="Collapsed">
@@ -181,6 +183,31 @@
                                      KeyDown="PasswordInput_KeyDown"/>
                     </StackPanel>
 
+                    <!-- Verification / email-change fields (toggled from code-behind).
+                         verify-email, verify-email-change and undo-email-change are
+                         all unauthenticated and all take nothing but { token }, so
+                         one token box serves all three and none of it needs a
+                         session. -->
+                    <StackPanel x:Name="VerifyFields" Visibility="Collapsed">
+                        <TextBlock Text="TOKEN FROM THE EMAIL"
+                                   FontSize="10" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,0,4"/>
+                        <TextBox Text="{Binding VerificationToken, UpdateSourceTrigger=PropertyChanged}"
+                                 FontSize="12"
+                                 FontFamily="JetBrains Mono, Consolas"
+                                 Padding="8,6" Margin="0,0,0,4"
+                                 TextWrapping="Wrap"
+                                 AcceptsReturn="False"
+                                 Background="{DynamicResource Surface2Brush}"
+                                 BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                                 Foreground="{DynamicResource TextBrush}"/>
+                        <TextBlock Text="{Binding PendingEmailSummary}"
+                                   FontSize="11"
+                                   Foreground="{DynamicResource TextMutedBrush}"
+                                   TextWrapping="Wrap"
+                                   Margin="0,0,0,10"/>
+                    </StackPanel>
+
                     <StackPanel x:Name="PasswordFields">
                         <TextBlock Text="PASSWORD"
                                    FontSize="10" FontWeight="SemiBold"
@@ -228,9 +255,41 @@
                             Style="{StaticResource LinkBtnStyle}"
                             Margin="0,14,0,0"/>
 
+                    <!-- Confirm/undo an email change. Shown unless GET /api/user has
+                         actually told us no change is pending — see
+                         ShowEmailChangeActions. -->
+                    <StackPanel x:Name="EmailChangeActions" Visibility="Collapsed">
+                        <Button x:Name="BtnConfirmEmailChange"
+                                Content="Confirm a new email address"
+                                Click="BtnConfirmEmailChange_Click"
+                                Style="{StaticResource LinkBtnStyle}"
+                                Margin="0,12,0,0"/>
+                        <Button x:Name="BtnUndoEmailChange"
+                                Content="Undo an email change"
+                                Click="BtnUndoEmailChange_Click"
+                                Style="{StaticResource LinkBtnStyle}"
+                                Margin="0,10,0,0"/>
+                    </StackPanel>
+
+                    <!-- Resend is cookie-session-only server-side (401 even with a
+                         valid bearer token), so this hands off to the browser
+                         rather than shipping a button that can only fail. -->
+                    <Button x:Name="BtnResendVerification"
+                            Content="Resend the email on the web"
+                            Click="BtnResendVerification_Click"
+                            Style="{StaticResource LinkBtnStyle}"
+                            Visibility="Collapsed"
+                            Margin="0,10,0,0"/>
+
                     <Button x:Name="BtnHaveResetToken"
                             Content="I already have a reset token"
                             Click="BtnHaveResetToken_Click"
+                            Style="{StaticResource LinkBtnStyle}"
+                            Margin="0,10,0,0"/>
+
+                    <Button x:Name="BtnVerifyEmail"
+                            Content="Verify an email or confirm a change"
+                            Click="BtnVerifyEmail_Click"
                             Style="{StaticResource LinkBtnStyle}"
                             Margin="0,10,0,0"/>
 
