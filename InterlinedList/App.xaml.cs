@@ -52,7 +52,17 @@ public partial class App : Application
                 restored = false;
             }
 
-            if (restored)
+            if (restored && IsAccountClosed())
+            {
+                // A saved token whose account has since been banned. The shell
+                // would come up looking functional and then 403 on everything,
+                // so drop the session instead and let the login screen surface
+                // the server's own rejection when they try again (#50).
+                AppLog.Info("Restored session belongs to a closed account; discarding it and showing login.");
+                AppServices.Session.Logout();
+                ShowLoginWindow();
+            }
+            else if (restored)
             {
                 AppLog.Info("Session restored; showing main window.");
                 ShowMainWindow();
@@ -116,12 +126,32 @@ public partial class App : Application
         var login = new LoginWindow();
         login.LoginSucceeded += (_, _) =>
         {
+            // Belt-and-braces: the server should reject a closed account's
+            // sign-in outright, but if a token is ever minted for one, don't
+            // open a shell that 403s on every action. The login window stays
+            // up rather than being replaced by a broken one (#50).
+            if (IsAccountClosed())
+            {
+                AppLog.Info("Sign-in produced a closed account; refusing to open the shell.");
+                AppServices.Session.Logout();
+                return;
+            }
+
             ShowMainWindow();
             login.Close();
         };
         MainWindow = login;
         login.Show();
     }
+
+    /// <summary>
+    /// A <c>banned</c> account is closed and cannot sign in — the one
+    /// <c>accountStatus</c> the app must refuse rather than merely annotate.
+    /// <c>restricted</c> and <c>suspended</c> deliberately do NOT land here:
+    /// per the product docs those accounts can still sign in, read and browse,
+    /// and get the read-only status banner instead.
+    /// </summary>
+    private static bool IsAccountClosed() => AppServices.Session.CurrentUser?.IsBanned == true;
 
     private void ShowMainWindow()
     {
