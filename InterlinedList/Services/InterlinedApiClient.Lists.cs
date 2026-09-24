@@ -54,6 +54,14 @@ public sealed partial class InterlinedApiClient
         await EnsureSuccessAsync(resp, ct);
     }
 
+    /// <summary>
+    /// Strict read of a list's rows. Note that the endpoint does NOT send a row's
+    /// <c>listId</c>, which <see cref="ListDataRow"/> currently declares
+    /// <c>required</c> — so this throws a <see cref="JsonException"/> until that
+    /// model is relaxed (#144/PR #146). Use <see cref="GetListRowsAsync"/>, which
+    /// maps the rows tolerantly, unless you specifically want the pagination
+    /// envelope.
+    /// </summary>
     public async Task<ListDataPage> GetListDataAsync(string listId, int limit = 50, int offset = 0, CancellationToken ct = default)
     {
         using var resp = await SendAsync(HttpMethod.Get, $"api/lists/{listId}/data?limit={limit}&offset={offset}", body: null, ct);
@@ -62,12 +70,72 @@ public sealed partial class InterlinedApiClient
             ?? throw new InterlinedApiException((int)resp.StatusCode, "GET /api/lists/{id}/data returned no body.");
     }
 
+    /// <summary>
+    /// Create a row. The body is <c>{ data: { … } }</c> keyed by each column's
+    /// KEY (verified live 2026-09-16; <c>rowData</c> as the wrapper is not
+    /// accepted, and unknown — even nested — keys go through untouched).
+    ///
+    /// Throws <see cref="ListRowValidationException"/> — not
+    /// <see cref="InterlinedApiException"/> — on the <c>422</c> a schema'd list
+    /// answers, so a typed editor can attach each message to the control that
+    /// caused it. Everything else fails the usual way. The success body isn't
+    /// parsed; callers re-read the rows (read-after-write, as elsewhere here).
+    /// </summary>
     public async Task AddListRowAsync(string listId, Dictionary<string, object?> rowData, CancellationToken ct = default)
     {
-        // Write-path response shape wasn't fully verified live — re-fetch rows afterward instead of parsing this.
         using var resp = await SendAsync(HttpMethod.Post, $"api/lists/{listId}/data", new { data = rowData }, ct);
-        await EnsureSuccessAsync(resp, ct);
+        await EnsureRowWriteSucceededAsync(resp, ct);
     }
+
+    /// <summary>
+    /// Read a list's rows tolerantly. <c>GET /api/lists/{id}/data</c> omits
+    /// <c>listId</c> (and <c>rowNumber</c>) from every row — verified live
+    /// 2026-09-16 — which makes <see cref="ListDataRow"/>'s <c>required</c>
+    /// <see cref="ListDataRow.ListId"/> throw a <see cref="JsonException"/>
+    /// straight through <see cref="GetListDataAsync"/>. That model is being
+    /// relaxed in #144/PR #146; until then this maps the rows by hand and fills
+    /// <c>listId</c> in from the request, so the typed row editor has something
+    /// to edit either way. It also means <c>version</c> is not surfaced yet —
+    /// no loss today, since the server ignores a <c>version</c> sent on a row
+    /// write (a deliberately stale one still answered 200).
+    /// </summary>
+    public async Task<List<ListDataRow>> GetListRowsAsync(
+        string listId, int limit = 50, int offset = 0, CancellationToken ct = default)
+    {
+        var json = await GetElementAsync($"api/lists/{listId}/data?limit={limit}&offset={offset}", ct);
+
+        var rows = new List<ListDataRow>();
+        if (!json.TryGetProperty("rows", out var arr) || arr.ValueKind != JsonValueKind.Array)
+            return rows;
+
+        foreach (var item in arr.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.Object) continue;
+
+            var data = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
+            if (item.TryGetProperty("rowData", out var rowData) && rowData.ValueKind == JsonValueKind.Object)
+                foreach (var property in rowData.EnumerateObject())
+                    data[property.Name] = property.Value.Clone();
+
+            rows.Add(new ListDataRow
+            {
+                Id = item.TryGetProperty("id", out var id) ? id.GetString() ?? string.Empty : string.Empty,
+                ListId = listId,
+                RowData = data,
+                CreatedAt = ReadDate(item, "createdAt"),
+                UpdatedAt = ReadDate(item, "updatedAt")
+            });
+        }
+
+        return rows;
+    }
+
+    private static DateTimeOffset ReadDate(JsonElement element, string name) =>
+        element.TryGetProperty(name, out var value)
+        && value.ValueKind == JsonValueKind.String
+        && DateTimeOffset.TryParse(value.GetString(), out var parsed)
+            ? parsed
+            : default;
 
     // GET /api/lists/{id} returns the list metadata under a "data" envelope
     // (verified live 2026-07-31).
@@ -81,10 +149,32 @@ public sealed partial class InterlinedApiClient
     public Task UpdateListAsync(string listId, string title, string? description, CancellationToken ct = default)
         => SendVoidAsync(HttpMethod.Put, $"api/lists/{listId}", new { title, description }, ct);
 
-    // Edit/delete of an individual row — the pieces that made rows write-once
-    // before. Same read-after-write discipline as AddListRowAsync.
-    public Task UpdateListRowAsync(string listId, string rowId, Dictionary<string, object?> rowData, CancellationToken ct = default)
-        => SendVoidAsync(HttpMethod.Put, $"api/lists/{listId}/data/{rowId}", new { data = rowData }, ct);
+    /// <summary>
+    /// Replace a row. <b>REPLACE, not merge</b> — live-verified 2026-09-16: a PUT
+    /// carrying one key left the row holding only that key, dropping five others
+    /// (orphaned values included). Callers must send every key they mean to keep.
+    /// Required columns are enforced here too, so a partial write of a schema'd
+    /// list answers <c>422</c> even when the value was already stored.
+    ///
+    /// Throws <see cref="ListRowValidationException"/> on that 422, same as
+    /// <see cref="AddListRowAsync"/>.
+    /// </summary>
+    public async Task UpdateListRowAsync(
+        string listId, string rowId, Dictionary<string, object?> rowData, CancellationToken ct = default)
+    {
+        using var resp = await SendAsync(HttpMethod.Put, $"api/lists/{listId}/data/{rowId}", new { data = rowData }, ct);
+        await EnsureRowWriteSucceededAsync(resp, ct);
+    }
+
+    /// <summary>
+    /// Row writes bypass the shared EnsureSuccessAsync because it keeps only
+    /// status + the top-level message and would drop a 422's <c>details</c> array.
+    /// </summary>
+    private static async Task EnsureRowWriteSucceededAsync(HttpResponseMessage resp, CancellationToken ct)
+    {
+        if (resp.IsSuccessStatusCode) return;
+        throw await ListRowValidationException.FromResponseAsync(resp, ct);
+    }
 
     public Task DeleteListRowAsync(string listId, string rowId, CancellationToken ct = default)
         => SendVoidAsync(HttpMethod.Delete, $"api/lists/{listId}/data/{rowId}", null, ct);
