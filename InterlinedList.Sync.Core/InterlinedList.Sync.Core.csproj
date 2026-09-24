@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Platform-neutral sync engine. Deliberately NOT net*-windows and NOT WPF so
+       it builds AND unit-tests on macOS/Linux (CI + local dev). All Windows-only
+       concerns (DPAPI token, tray UI, autostart, FileSystemWatcher host) live in
+       the InterlinedList.Sync tray project that references this one. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>InterlinedList.Sync.Core</AssemblyName>
+    <RootNamespace>InterlinedList.Sync.Core</RootNamespace>
+    <!-- Required even though this project is platform-neutral, and it is NOT a
+         contradiction of the comment above: the MSIX packaging project triggers a
+         nested `publish -r win-x64` of InterlinedList.Sync, which flows the RID
+         down to this ProjectReference. A RID passed on the CLI is not enough — it
+         must be declared here so it is available at RESTORE time. Otherwise:
+
+           error NETSDK1047: Assets file '...\InterlinedList.Sync.Core\obj\
+           project.assets.json' doesn't have a target for 'net10.0/win-x64'.
+
+         which cascades into APPX0703 ("Manifest references file
+         'InterlinedList.Sync.exe' which is not part of the payload") because the
+         tray exe never gets published. Same trap CLAUDE.md already documents for
+         InterlinedList.csproj and InterlinedList.Sync.csproj — this project was
+         added later and never got the same treatment.
+
+         Declaring a RID does not make the project Windows-only: TargetFramework
+         stays net10.0, so it still builds and unit-tests on macOS/Linux. -->
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.10" />
+    <!-- Override the vulnerable SQLitePCLRaw.lib.e_sqlite3 2.1.11 that Microsoft.Data.Sqlite
+         pulls transitively (NU1903 / GHSA-2m69-gcr7-jv3q) with the patched bundle. -->
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.5" />
+  </ItemGroup>
+
+</Project>
