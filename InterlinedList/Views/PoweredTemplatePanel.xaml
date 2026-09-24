@@ -1,0 +1,416 @@
+<UserControl x:Class="InterlinedList.Views.PoweredTemplatePanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:InterlinedList.ViewModels"
+             xmlns:local="clr-namespace:InterlinedList.Views"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d"
+             d:DesignWidth="760">
+
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
+        <local:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibility"/>
+        <local:NullOrEmptyToVisibilityConverter x:Key="NullOrEmptyToVisibility"/>
+
+        <Style x:Key="AiFieldStyle" TargetType="TextBox">
+            <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextBodyBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="8,6"/>
+            <Setter Property="FontSize" Value="13"/>
+        </Style>
+
+        <Style x:Key="AiCellStyle" TargetType="TextBox">
+            <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextBodyBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="6,4"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Width" Value="140"/>
+            <Setter Property="Margin" Value="0,0,4,0"/>
+        </Style>
+
+        <Style x:Key="AiPrimaryBtnStyle" TargetType="Button">
+            <Setter Property="Background" Value="{DynamicResource PrimaryBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="14,6"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" CornerRadius="4" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="{DynamicResource PrimaryHoverBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="AiSmallBtnStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="10,3"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Margin" Value="0,0,6,0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="3"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <!--
+        The whole control collapses when the AI gate is closed, so a free
+        account (or a server with no ANTHROPIC_API_KEY) sees nothing at all —
+        not a disabled button, not an upsell. That is #10's rule and this is
+        where it's enforced for #14.
+    -->
+    <Border Background="{DynamicResource Surface2Brush}"
+            BorderBrush="{DynamicResource BorderBrush}"
+            BorderThickness="1"
+            CornerRadius="4"
+            Visibility="{Binding IsAiAvailable, Converter={StaticResource BoolToVisibility}}">
+        <StackPanel>
+
+            <!-- ── Header: always visible once the gate is open ─────────── -->
+            <Grid Margin="12,10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                    <!-- Amber pip: the brand's live/AI accent. -->
+                    <Ellipse Width="7" Height="7"
+                             Fill="{StaticResource AmberBrush}"
+                             VerticalAlignment="Center"
+                             Margin="0,0,8,0"/>
+                    <TextBlock Text="Powered Template"
+                               FontSize="13" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextBrush}"
+                               VerticalAlignment="Center"/>
+                    <TextBlock Text="describe a list, get a schema and starter rows"
+                               FontSize="11"
+                               Foreground="{DynamicResource TextMutedBrush}"
+                               VerticalAlignment="Center"
+                               Margin="10,1,0,0"
+                               Visibility="{Binding IsOpen, Converter={StaticResource InverseBoolToVisibility}}"/>
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <!-- Remaining quota, visible wherever the AI action is offered. -->
+                    <local:AiQuotaChip Margin="0,0,8,0"/>
+                    <Button Command="{Binding ToggleOpenCommand}"
+                            Style="{StaticResource AiSmallBtnStyle}"
+                            Margin="0">
+                        <Button.Content>
+                            <TextBlock>
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Text" Value="Use AI"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsOpen}" Value="True">
+                                                <Setter Property="Text" Value="Close"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Button.Content>
+                    </Button>
+                </StackPanel>
+            </Grid>
+
+            <!-- ── Body ─────────────────────────────────────────────────── -->
+            <StackPanel Margin="12,0,12,12"
+                        Visibility="{Binding IsOpen, Converter={StaticResource BoolToVisibility}}">
+
+                <!-- Description input -->
+                <TextBlock Text="DESCRIBE THE LIST"
+                           FontSize="10" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextMutedBrush}"
+                           Margin="0,0,0,4"/>
+                <TextBox Text="{Binding Description, UpdateSourceTrigger=PropertyChanged}"
+                         Style="{StaticResource AiFieldStyle}"
+                         AcceptsReturn="True"
+                         TextWrapping="Wrap"
+                         MinHeight="54"/>
+
+                <DockPanel Margin="0,6,0,0">
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                        <Button Content="Draft it"
+                                Command="{Binding SuggestCommand}"
+                                Style="{StaticResource AiPrimaryBtnStyle}"/>
+                    </StackPanel>
+                    <TextBlock VerticalAlignment="Center"
+                               FontSize="10"
+                               FontFamily="JetBrains Mono, Consolas"
+                               Text="{Binding WordCountLabel}">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsOverWordCap}" Value="True">
+                                        <Setter Property="Foreground" Value="{StaticResource AmberBrush}"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                </DockPanel>
+
+                <!-- Pending: amber, in place, non-blocking. -->
+                <TextBlock Text="{Binding BusyText}"
+                           FontSize="11"
+                           Foreground="{StaticResource AmberBrush}"
+                           TextWrapping="Wrap"
+                           Margin="0,8,0,0"
+                           Visibility="{Binding BusyText, Converter={StaticResource NullOrEmptyToVisibility}}"/>
+
+                <!-- The one in-place message slot. Never a dialog. -->
+                <local:AiNoticeBar Notice="{Binding Notice}" Margin="0,8,0,0"/>
+
+                <!-- ── Preview ──────────────────────────────────────────── -->
+                <StackPanel Margin="0,12,0,0"
+                            Visibility="{Binding HasPreview, Converter={StaticResource BoolToVisibility}}">
+
+                    <Border Background="{DynamicResource Surface3Brush}"
+                            BorderBrush="{DynamicResource BorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="4"
+                            Padding="12,10">
+                        <StackPanel>
+                            <TextBlock Text="PROPOSED LIST"
+                                       FontSize="10" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextMutedBrush}"
+                                       Margin="0,0,0,6"/>
+                            <TextBox Text="{Binding ListTitle, UpdateSourceTrigger=PropertyChanged}"
+                                     Style="{StaticResource AiFieldStyle}"
+                                     FontWeight="SemiBold"
+                                     Margin="0,0,0,6"/>
+                            <TextBox Text="{Binding ListDescription, UpdateSourceTrigger=PropertyChanged}"
+                                     Style="{StaticResource AiFieldStyle}"
+                                     AcceptsReturn="True"
+                                     TextWrapping="Wrap"
+                                     MinHeight="40"/>
+
+                            <!-- ── Columns (type / label / required) ────── -->
+                            <DockPanel Margin="0,14,0,6">
+                                <TextBlock DockPanel.Dock="Left"
+                                           Text="COLUMNS"
+                                           FontSize="10" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextMutedBrush}"
+                                           VerticalAlignment="Center"/>
+                                <TextBlock Text="{Binding ColumnCountLabel}"
+                                           HorizontalAlignment="Right"
+                                           FontSize="10"
+                                           FontFamily="JetBrains Mono, Consolas"
+                                           Foreground="{DynamicResource TextMutedBrush}"
+                                           VerticalAlignment="Center"/>
+                            </DockPanel>
+
+                            <ItemsControl ItemsSource="{Binding Columns}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:AiListColumnViewModel}">
+                                        <Border Background="{DynamicResource SurfaceBrush}"
+                                                BorderBrush="{DynamicResource BorderBrush}"
+                                                BorderThickness="1"
+                                                CornerRadius="3"
+                                                Padding="8,6"
+                                                Margin="0,0,0,4">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="110"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+
+                                                <StackPanel Grid.Column="0" Margin="0,0,8,0">
+                                                    <TextBox Text="{Binding Label, UpdateSourceTrigger=PropertyChanged}"
+                                                             Background="Transparent"
+                                                             BorderThickness="0"
+                                                             Padding="0"
+                                                             FontSize="12"
+                                                             Foreground="{DynamicResource TextBrush}"/>
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Text="{Binding Key}"
+                                                                   FontSize="10"
+                                                                   FontFamily="JetBrains Mono, Consolas"
+                                                                   Foreground="{DynamicResource TextMutedBrush}"/>
+                                                        <TextBlock Text="{Binding ExtraRulesNote, StringFormat=' · {0}'}"
+                                                                   FontSize="10"
+                                                                   Foreground="{DynamicResource TextMutedBrush}"
+                                                                   TextTrimming="CharacterEllipsis"
+                                                                   MaxWidth="260"
+                                                                   Visibility="{Binding HasExtraRules, Converter={StaticResource BoolToVisibility}}"/>
+                                                    </StackPanel>
+                                                </StackPanel>
+
+                                                <ComboBox Grid.Column="1"
+                                                          ItemsSource="{Binding AvailableTypes}"
+                                                          SelectedItem="{Binding Type}"
+                                                          FontSize="11"
+                                                          VerticalAlignment="Center"
+                                                          Margin="0,0,8,0"/>
+
+                                                <CheckBox Grid.Column="2"
+                                                          Content="Required"
+                                                          IsChecked="{Binding Required}"
+                                                          FontSize="11"
+                                                          Foreground="{DynamicResource TextBodyBrush}"
+                                                          VerticalAlignment="Center"
+                                                          Margin="0,0,8,0"/>
+
+                                                <Button Grid.Column="3"
+                                                        Content="Remove"
+                                                        Command="{Binding DataContext.RemoveColumnCommand, RelativeSource={RelativeSource AncestorType=local:PoweredTemplatePanel}}"
+                                                        CommandParameter="{Binding}"
+                                                        Style="{StaticResource AiSmallBtnStyle}"
+                                                        Margin="0"
+                                                        VerticalAlignment="Center"/>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <DockPanel Margin="0,4,0,0">
+                                <Button DockPanel.Dock="Right"
+                                        Content="Add column"
+                                        Command="{Binding AddColumnCommand}"
+                                        Style="{StaticResource AiSmallBtnStyle}"
+                                        Margin="6,0,0,0"/>
+                                <TextBox Text="{Binding NewColumnLabel, UpdateSourceTrigger=PropertyChanged}"
+                                         Style="{StaticResource AiFieldStyle}"
+                                         FontSize="11"
+                                         Padding="6,4"/>
+                            </DockPanel>
+
+                            <!-- ── Starter rows, as a table ─────────────── -->
+                            <TextBlock Text="STARTER ROWS"
+                                       FontSize="10" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextMutedBrush}"
+                                       Margin="0,14,0,6"/>
+
+                            <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                                          VerticalScrollBarVisibility="Disabled">
+                                <StackPanel>
+                                    <!-- Header row: one 140px cell per column, matching the body. -->
+                                    <ItemsControl ItemsSource="{Binding Columns}" Margin="0,0,0,4">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <StackPanel Orientation="Horizontal"/>
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate DataType="{x:Type vm:AiListColumnViewModel}">
+                                                <StackPanel Width="140" Margin="0,0,4,0">
+                                                    <TextBlock Text="{Binding Label}"
+                                                               FontSize="11" FontWeight="SemiBold"
+                                                               Foreground="{DynamicResource TextBrush}"
+                                                               TextTrimming="CharacterEllipsis"/>
+                                                    <TextBlock FontSize="9"
+                                                               FontFamily="JetBrains Mono, Consolas"
+                                                               Foreground="{DynamicResource TextMutedBrush}">
+                                                        <Run Text="{Binding Type, Mode=OneWay}"/>
+                                                        <Run Text="{Binding Required, Mode=OneWay, StringFormat=' · required: {0}'}"/>
+                                                    </TextBlock>
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+
+                                    <!-- Body rows -->
+                                    <ItemsControl ItemsSource="{Binding Rows}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate DataType="{x:Type vm:AiListRowViewModel}">
+                                                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                                    <ItemsControl ItemsSource="{Binding Cells}">
+                                                        <ItemsControl.ItemsPanel>
+                                                            <ItemsPanelTemplate>
+                                                                <StackPanel Orientation="Horizontal"/>
+                                                            </ItemsPanelTemplate>
+                                                        </ItemsControl.ItemsPanel>
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate DataType="{x:Type vm:AiListCellViewModel}">
+                                                                <TextBox Text="{Binding Text, UpdateSourceTrigger=PropertyChanged}"
+                                                                         Style="{StaticResource AiCellStyle}"/>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+                                                    <Button Content="×"
+                                                            ToolTip="Remove this row"
+                                                            Command="{Binding DataContext.RemoveRowCommand, RelativeSource={RelativeSource AncestorType=local:PoweredTemplatePanel}}"
+                                                            CommandParameter="{Binding}"
+                                                            Style="{StaticResource AiSmallBtnStyle}"
+                                                            Margin="2,0,0,0"
+                                                            VerticalAlignment="Center"/>
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </ScrollViewer>
+
+                            <Button Content="Add row"
+                                    Command="{Binding AddRowCommand}"
+                                    Style="{StaticResource AiSmallBtnStyle}"
+                                    HorizontalAlignment="Left"
+                                    Margin="0,4,0,0"/>
+
+                            <!-- ── Confirm / discard ────────────────────── -->
+                            <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
+                                <Button Content="Create this list"
+                                        Command="{Binding ConfirmCommand}"
+                                        Style="{StaticResource AiPrimaryBtnStyle}"
+                                        Margin="0,0,8,0"/>
+                                <Button Content="Discard draft"
+                                        Command="{Binding DiscardCommand}"
+                                        Style="{StaticResource AiSmallBtnStyle}"/>
+                            </StackPanel>
+
+                            <TextBlock Text="{Binding UsageLabel}"
+                                       FontSize="9"
+                                       FontFamily="JetBrains Mono, Consolas"
+                                       Foreground="{DynamicResource TextMutedBrush}"
+                                       Margin="0,8,0,0"
+                                       Visibility="{Binding UsageLabel, Converter={StaticResource NullOrEmptyToVisibility}}"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</UserControl>
