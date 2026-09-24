@@ -13,6 +13,8 @@
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
         <local:NullOrEmptyToVisibilityConverter x:Key="NullOrEmptyToVisibility"/>
+        <local:StringEqualsToBoolConverter x:Key="StringEqualsToBool"/>
+        <local:InverseBooleanConverter x:Key="InverseBool"/>
 
         <!-- Text field -->
         <Style x:Key="FieldStyle" TargetType="TextBox">
@@ -143,11 +145,32 @@
             <Setter Property="FontSize" Value="10"/>
             <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}"/>
         </Style>
+
+        <!-- Narrow numeric field, for the bounded preference values -->
+        <Style x:Key="NumberFieldStyle" TargetType="TextBox" BasedOn="{StaticResource FieldStyle}">
+            <Setter Property="Width" Value="88"/>
+            <Setter Property="HorizontalAlignment" Value="Left"/>
+            <Setter Property="FontFamily" Value="JetBrains Mono, Consolas"/>
+        </Style>
+
+        <Style x:Key="PrefRadioStyle" TargetType="RadioButton">
+            <Setter Property="Foreground" Value="{DynamicResource TextBodyBrush}"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Margin" Value="0,0,16,4"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+
+        <Style x:Key="PrefCheckStyle" TargetType="CheckBox">
+            <Setter Property="Foreground" Value="{DynamicResource TextBodyBrush}"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Margin" Value="0,0,0,8"/>
+        </Style>
     </UserControl.Resources>
 
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>  <!-- Header -->
+            <RowDefinition Height="Auto"/>  <!-- Account-status banner -->
             <RowDefinition Height="Auto"/>  <!-- Error banner -->
             <RowDefinition Height="*"/>     <!-- Sections -->
         </Grid.RowDefinitions>
@@ -172,8 +195,106 @@
             </Grid>
         </Border>
 
-        <!-- Error banner -->
+        <!-- ============ Account-status banner (#50) ============ -->
+        <!-- The web puts this at the top of the home page. MainWindow is the
+             equivalent home here, but it's in flight (#149), so it lands at the
+             top of Settings for now — same block, different host. Amber for
+             probation (recoverable), the view's existing #FFE81123 error red for
+             restricted/suspended/banned. -->
         <Border Grid.Row="1"
+                BorderThickness="0,0,0,1"
+                Padding="20,12"
+                Visibility="{Binding AccountStatus.IsVisible, Converter={StaticResource BoolToVisibility}, FallbackValue=Collapsed}">
+            <Border.Style>
+                <Style TargetType="Border">
+                    <!-- Danger is the safer default: an unknown status must not
+                         read as a mild, recoverable one. -->
+                    <Setter Property="Background" Value="#1AE81123"/>
+                    <Setter Property="BorderBrush" Value="#66E81123"/>
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding AccountStatus.Severity}" Value="warning">
+                            <Setter Property="Background" Value="#1AF0A830"/>
+                            <Setter Property="BorderBrush" Value="#66F0A830"/>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- 4px status edge, same vocabulary as the post cards -->
+                <Border Grid.Column="0" Width="4" CornerRadius="3" Margin="0,0,12,0">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Background" Value="#FFE81123"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding AccountStatus.Severity}" Value="warning">
+                                    <Setter Property="Background" Value="{StaticResource AmberBrush}"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                </Border>
+
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding AccountStatus.Headline}"
+                               FontSize="14" FontWeight="SemiBold"
+                               TextWrapping="Wrap">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="#FFE81123"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding AccountStatus.Severity}" Value="warning">
+                                        <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+
+                    <TextBlock Text="{Binding AccountStatus.Detail}"
+                               FontSize="12"
+                               Foreground="{DynamicResource TextBodyBrush}"
+                               TextWrapping="Wrap"
+                               Margin="0,4,0,0"/>
+
+                    <!-- Name what's locked, so nothing fails on click unexplained. -->
+                    <TextBlock Text="{Binding AccountStatus.LockedFeatures, StringFormat='Locked: {0}'}"
+                               Style="{StaticResource MonoMetaStyle}"
+                               TextWrapping="Wrap"
+                               Margin="0,6,0,0"
+                               Visibility="{Binding AccountStatus.HasLockedFeatures, Converter={StaticResource BoolToVisibility}}"/>
+                </StackPanel>
+
+                <Button Grid.Column="2"
+                        Content="{Binding AccountStatus.ActionLabel}"
+                        Command="{Binding OpenAccountStatusActionCommand}"
+                        VerticalAlignment="Center"
+                        Margin="12,0,0,0"
+                        Visibility="{Binding AccountStatus.ActionLabel, Converter={StaticResource NullOrEmptyToVisibility}}">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource DigBtnStyle}">
+                            <Setter Property="BorderBrush" Value="#FFE81123"/>
+                            <Setter Property="Foreground" Value="#FFE81123"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding AccountStatus.Severity}" Value="warning">
+                                    <Setter Property="BorderBrush" Value="{StaticResource AmberBrush}"/>
+                                    <Setter Property="Foreground" Value="{StaticResource AmberBrush}"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
+            </Grid>
+        </Border>
+
+        <!-- Error banner -->
+        <Border Grid.Row="2"
                 Background="#1AE81123"
                 Padding="20,8">
             <Border.Style>
@@ -193,7 +314,7 @@
         </Border>
 
         <!-- Sections -->
-        <ScrollViewer Grid.Row="2"
+        <ScrollViewer Grid.Row="3"
                       VerticalScrollBarVisibility="Auto"
                       HorizontalScrollBarVisibility="Disabled"
                       Padding="20,16">
@@ -241,6 +362,170 @@
                                 Command="{Binding SaveProfileCommand}"
                                 HorizontalAlignment="Left"
                                 Style="{StaticResource PrimaryBtnStyle}"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- ============ Preferences (#46) ============ -->
+                <!-- These are the server-side preferences from GET /api/user,
+                     written back with PATCH /api/user/update. Field names, the
+                     viewingPreference enum and every range below were verified
+                     live 2026-09-16. Editing them here is half the job: each one
+                     also has a consumption point elsewhere in the app, noted per
+                     control so the remaining wiring is obvious. -->
+                <Border Background="{DynamicResource SurfaceBrush}"
+                        BorderBrush="{DynamicResource BorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="4"
+                        Padding="16"
+                        Margin="0,0,0,16">
+                    <StackPanel>
+                        <TextBlock Text="Preferences" Style="{StaticResource SectionTitleStyle}"/>
+                        <TextBlock Text="These follow your account, so a change made on the web shows up here too — and the other way round."
+                                   Style="{StaticResource SubtleTextStyle}"
+                                   Margin="0,4,0,16"/>
+
+                        <!-- Theme -->
+                        <TextBlock Text="Theme"
+                                   Style="{StaticResource FieldLabelStyle}"
+                                   Margin="0,0,0,2"/>
+                        <TextBlock Text="Light or Dark pins the app; Follow Windows tracks the OS setting."
+                                   Style="{StaticResource SubtleTextStyle}"
+                                   Margin="0,0,0,6"/>
+                        <WrapPanel Margin="0,0,0,16">
+                            <RadioButton Content="Follow Windows" GroupName="PrefTheme"
+                                         Style="{StaticResource PrefRadioStyle}"
+                                         IsChecked="{Binding Theme, Mode=TwoWay,
+                                                     Converter={StaticResource StringEqualsToBool},
+                                                     ConverterParameter=system}"/>
+                            <RadioButton Content="Light" GroupName="PrefTheme"
+                                         Style="{StaticResource PrefRadioStyle}"
+                                         IsChecked="{Binding Theme, Mode=TwoWay,
+                                                     Converter={StaticResource StringEqualsToBool},
+                                                     ConverterParameter=light}"/>
+                            <RadioButton Content="Dark" GroupName="PrefTheme"
+                                         Style="{StaticResource PrefRadioStyle}"
+                                         IsChecked="{Binding Theme, Mode=TwoWay,
+                                                     Converter={StaticResource StringEqualsToBool},
+                                                     ConverterParameter=dark}"/>
+                        </WrapPanel>
+
+                        <!-- Viewing preference -->
+                        <TextBlock Text="Home feed shows"
+                                   Style="{StaticResource FieldLabelStyle}"
+                                   Margin="0,0,0,2"/>
+                        <TextBlock Text="Saved on your account. The feed itself still needs wiring — see the note below."
+                                   Style="{StaticResource SubtleTextStyle}"
+                                   Margin="0,0,0,6"/>
+                        <WrapPanel Margin="0,0,0,16">
+                            <RadioButton Content="My messages" GroupName="PrefViewing"
+                                         Style="{StaticResource PrefRadioStyle}"
+                                         IsChecked="{Binding ViewingPreference, Mode=TwoWay,
+                                                     Converter={StaticResource StringEqualsToBool},
+                                                     ConverterParameter=my_messages}"/>
+                            <RadioButton Content="All messages" GroupName="PrefViewing"
+                                         Style="{StaticResource PrefRadioStyle}"
+                                         IsChecked="{Binding ViewingPreference, Mode=TwoWay,
+                                                     Converter={StaticResource StringEqualsToBool},
+                                                     ConverterParameter=all_messages}"/>
+                            <RadioButton Content="Followers only" GroupName="PrefViewing"
+                                         Style="{StaticResource PrefRadioStyle}"
+                                         IsChecked="{Binding ViewingPreference, Mode=TwoWay,
+                                                     Converter={StaticResource StringEqualsToBool},
+                                                     ConverterParameter=followers_only}"/>
+                            <RadioButton Content="Following only" GroupName="PrefViewing"
+                                         Style="{StaticResource PrefRadioStyle}"
+                                         IsChecked="{Binding ViewingPreference, Mode=TwoWay,
+                                                     Converter={StaticResource StringEqualsToBool},
+                                                     ConverterParameter=following_only}"/>
+                        </WrapPanel>
+
+                        <!-- Bounded numbers -->
+                        <Grid Margin="0,0,0,16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                                <TextBlock Text="Max message length"
+                                           Style="{StaticResource FieldLabelStyle}"
+                                           Margin="0,0,0,2"/>
+                                <TextBlock Text="1–10000. Drives the composer's counter."
+                                           Style="{StaticResource SubtleTextStyle}"
+                                           Margin="0,0,0,6"/>
+                                <TextBox Text="{Binding MaxMessageLength, UpdateSourceTrigger=PropertyChanged}"
+                                         Style="{StaticResource NumberFieldStyle}"/>
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="1" Margin="0,0,12,0">
+                                <TextBlock Text="Messages per page"
+                                           Style="{StaticResource FieldLabelStyle}"
+                                           Margin="0,0,0,2"/>
+                                <TextBlock Text="10–30. Feed page size."
+                                           Style="{StaticResource SubtleTextStyle}"
+                                           Margin="0,0,0,6"/>
+                                <TextBox Text="{Binding MessagesPerPage, UpdateSourceTrigger=PropertyChanged}"
+                                         Style="{StaticResource NumberFieldStyle}"/>
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="Alerts kept in tray"
+                                           Style="{StaticResource FieldLabelStyle}"
+                                           Margin="0,0,0,2"/>
+                                <TextBlock Text="10–40. Alerts rail fetch limit."
+                                           Style="{StaticResource SubtleTextStyle}"
+                                           Margin="0,0,0,6"/>
+                                <TextBox Text="{Binding NotificationTrayLimit, UpdateSourceTrigger=PropertyChanged}"
+                                         Style="{StaticResource NumberFieldStyle}"/>
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- Toggles -->
+                        <CheckBox Content="Show link preview cards in the feed"
+                                  IsChecked="{Binding ShowPreviews}"
+                                  Style="{StaticResource PrefCheckStyle}"/>
+                        <CheckBox Content="New posts are publicly visible by default"
+                                  IsChecked="{Binding DefaultPubliclyVisible}"
+                                  Style="{StaticResource PrefCheckStyle}"/>
+                        <CheckBox Content="Show advanced post settings (media &amp; cross-posting)"
+                                  IsChecked="{Binding ShowAdvancedPostSettings}"
+                                  Style="{StaticResource PrefCheckStyle}"
+                                  Margin="0,0,0,16"/>
+
+                        <!-- Location -->
+                        <TextBlock Text="Profile location"
+                                   Style="{StaticResource FieldLabelStyle}"
+                                   Margin="0,0,0,2"/>
+                        <TextBlock Text="Optional, decimal degrees. Leave blank to skip — the app has no location-aware widgets yet."
+                                   Style="{StaticResource SubtleTextStyle}"
+                                   Margin="0,0,0,6"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                            <StackPanel Margin="0,0,12,0">
+                                <TextBlock Text="Latitude" Style="{StaticResource MonoMetaStyle}" Margin="0,0,0,2"/>
+                                <TextBox Text="{Binding Latitude, UpdateSourceTrigger=PropertyChanged}"
+                                         Style="{StaticResource NumberFieldStyle}"/>
+                            </StackPanel>
+                            <StackPanel>
+                                <TextBlock Text="Longitude" Style="{StaticResource MonoMetaStyle}" Margin="0,0,0,2"/>
+                                <TextBox Text="{Binding Longitude, UpdateSourceTrigger=PropertyChanged}"
+                                         Style="{StaticResource NumberFieldStyle}"/>
+                            </StackPanel>
+                        </StackPanel>
+
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                            <Button Content="Save preferences"
+                                    Command="{Binding SavePreferencesCommand}"
+                                    Style="{StaticResource PrimaryBtnStyle}"
+                                    Margin="0,0,8,0"/>
+                            <Button Content="Reload from server"
+                                    Command="{Binding ReloadPreferencesCommand}"
+                                    Style="{StaticResource SmallBtnStyle}"
+                                    VerticalAlignment="Center"/>
+                        </StackPanel>
+
+                        <TextBlock Style="{StaticResource SubtleTextStyle}"
+                                   Text="Theme takes effect immediately. The composer counter, feed page size, feed filter, link previews and the Alerts tray limit read these values from your account — that wiring lands with the feed and shell work (see #46)."/>
                     </StackPanel>
                 </Border>
 
@@ -401,22 +686,44 @@
                                                            Style="{StaticResource SubtleTextStyle}"
                                                            Margin="0,2,0,0"
                                                            Visibility="{Binding Description, Converter={StaticResource NullOrEmptyToVisibility}}"/>
+                                                <TextBlock Text="{Binding StatusMessage}"
+                                                           Foreground="#FFE81123"
+                                                           FontSize="11"
+                                                           TextWrapping="Wrap"
+                                                           Margin="0,4,0,0"
+                                                           Visibility="{Binding StatusMessage, Converter={StaticResource NullOrEmptyToVisibility}}"/>
                                             </StackPanel>
-                                            <StackPanel Grid.Column="1"
-                                                        Orientation="Horizontal"
-                                                        VerticalAlignment="Center">
-                                                <CheckBox Content="Push"
-                                                          IsChecked="{Binding Push, Mode=TwoWay}"
-                                                          Foreground="{DynamicResource TextBodyBrush}"
-                                                          FontSize="12"
-                                                          Margin="0,0,14,0"
-                                                          VerticalAlignment="Center"/>
-                                                <CheckBox Content="In-app"
-                                                          IsChecked="{Binding InApp, Mode=TwoWay}"
-                                                          Foreground="{DynamicResource TextBodyBrush}"
-                                                          FontSize="12"
-                                                          VerticalAlignment="Center"/>
-                                            </StackPanel>
+                                            <!-- One checkbox per channel the event
+                                                 actually supports. A fixed Push/In-app
+                                                 pair silently broke follow, reply and
+                                                 share, which the server rejects with 400
+                                                 for an unsupported channel. -->
+                                            <ItemsControl Grid.Column="1"
+                                                          ItemsSource="{Binding Channels}"
+                                                          VerticalAlignment="Center">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate>
+                                                        <StackPanel Orientation="Horizontal"/>
+                                                    </ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate DataType="{x:Type vm:NotificationChannelViewModel}">
+                                                        <!-- ToolTip explains a channel this
+                                                             desktop app cannot deliver: push is
+                                                             iOS/Android only, so the setting
+                                                             governs the user's phone. -->
+                                                        <CheckBox Content="{Binding Label}"
+                                                                  IsChecked="{Binding Enabled, Mode=TwoWay}"
+                                                                  IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                                                                  ToolTip="{Binding DeliveryNote}"
+                                                                  ToolTipService.ShowOnDisabled="True"
+                                                                  Foreground="{DynamicResource TextBodyBrush}"
+                                                                  FontSize="12"
+                                                                  Margin="0,0,14,0"
+                                                                  VerticalAlignment="Center"/>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
                                         </Grid>
                                     </Border>
                                 </DataTemplate>

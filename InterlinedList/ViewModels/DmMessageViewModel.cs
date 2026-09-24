@@ -27,5 +27,12 @@ public sealed class DmMessageViewModel
 
     // A message is "trashed" from this user's perspective when it's their own
     // and they've soft-deleted it (SenderDeletedAt). The bubble dims/relabels.
+    //
+    // CAVEAT (live-verified 2026-09-15): in practice this is ALWAYS false. The
+    // API never serializes the per-side delete timestamps — see the remarks on
+    // DirectMessage — so trash state is knowable only from WHICH folder returned
+    // a message. The Deleted tab is therefore the real restore surface; this
+    // property survives only as the in-thread dim/relabel hook for if the server
+    // ever starts exposing the field.
     public bool IsTrashed => IsMine && _message.SenderDeletedAt is not null;
 }
