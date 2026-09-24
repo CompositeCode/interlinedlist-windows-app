@@ -392,7 +392,7 @@
                                         </DockPanel>
 
                                         <!-- Body -->
-                                        <TextBlock Text="{Binding Content}"
+                                        <TextBlock local:MentionText.Text="{Binding Content}"
                                                    FontSize="13"
                                                    Foreground="{DynamicResource TextBodyBrush}"
                                                    TextWrapping="Wrap"
@@ -518,7 +518,7 @@
                                                                            Foreground="{DynamicResource TextMutedBrush}"
                                                                            HorizontalAlignment="Right"/>
                                                             </DockPanel>
-                                                            <TextBlock Text="{Binding Content}" FontSize="12"
+                                                            <TextBlock local:MentionText.Text="{Binding Content}" FontSize="12"
                                                                        Foreground="{DynamicResource TextBodyBrush}"
                                                                        TextWrapping="Wrap" LineHeight="18"/>
                                                         </StackPanel>
@@ -558,7 +558,7 @@
                                   <StackPanel>
                                       <TextBlock Text="⏱ Scheduled" FontSize="10" FontWeight="SemiBold"
                                                  Foreground="{StaticResource AmberBrush}" Margin="0,0,0,4"/>
-                                      <TextBlock Text="{Binding Content}" FontSize="13"
+                                      <TextBlock local:MentionText.Text="{Binding Content}" FontSize="13"
                                                  Foreground="{DynamicResource TextBodyBrush}" TextWrapping="Wrap"/>
                                   </StackPanel>
                               </Border>
