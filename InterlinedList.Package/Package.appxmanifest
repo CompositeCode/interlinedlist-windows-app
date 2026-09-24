@@ -3,8 +3,9 @@
   xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
   xmlns:mp="http://schemas.microsoft.com/appx/2014/phone/manifest"
   xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:uap5="http://schemas.microsoft.com/appx/manifest/uap/windows10/5"
   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
-  IgnorableNamespaces="uap mp rescap">
+  IgnorableNamespaces="uap uap5 mp rescap">
 
   <Identity
     Name="InterlinedList"
@@ -37,6 +38,38 @@
         Square44x44Logo="Images\Square44x44Logo.png">
         <uap:SplashScreen Image="Images\SplashScreen.png" BackgroundColor="#0C2C3A" />
       </uap:VisualElements>
+    </Application>
+
+    <!-- Background document-sync tray utility. Auto-launches at login via the
+         windows.startupTask extension (the MSIX equivalent of the MSI's Run key).
+
+         NOTE the subdirectory in Executable, and don't "tidy" it to a bare
+         filename. Desktop Bridge flattens only the ENTRY-POINT project's output
+         (EntryPointProjectUniqueName, i.e. InterlinedList.csproj) to the package
+         root; every other ProjectReference is harvested into a folder named
+         after the project. CI proves it:
+
+           InterlinedList.exe      -> ...\bin\x64\Release\InterlinedList\InterlinedList.exe
+           InterlinedList.Sync.exe -> ...\bin\x64\Release\InterlinedList.Sync\InterlinedList.Sync.exe
+
+         A bare "InterlinedList.Sync.exe" therefore fails the build with
+         APPX0703 "Manifest references file 'InterlinedList.Sync.exe' which is
+         not part of the payload". This differs from the MSI, where the
+         documented build publishes both projects into the SAME folder and WiX
+         globs it — so the two packaging tracks legitimately need different
+         paths here. -->
+    <Application Id="InterlinedListSync" Executable="InterlinedList.Sync\InterlinedList.Sync.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements
+        DisplayName="InterlinedList Sync"
+        Description="Keep a local folder of documents in sync for Obsidian."
+        BackgroundColor="#0C2C3A"
+        Square150x150Logo="Images\Square150x150Logo.png"
+        Square44x44Logo="Images\Square44x44Logo.png" />
+      <Extensions>
+        <uap5:Extension Category="windows.startupTask" Executable="InterlinedList.Sync\InterlinedList.Sync.exe" EntryPoint="Windows.FullTrustApplication">
+          <uap5:StartupTask TaskId="InterlinedListSyncStartup" Enabled="true" DisplayName="InterlinedList Sync" />
+        </uap5:Extension>
+      </Extensions>
     </Application>
   </Applications>
 

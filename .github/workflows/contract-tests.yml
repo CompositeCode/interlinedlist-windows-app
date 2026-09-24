@@ -1,0 +1,106 @@
+name: Contract tests (live API)
+
+# NOT on push or pull_request, deliberately.
+#
+# https://interlinedlist.com is a live, shared system and the test account is
+# shared test infrastructure. Running this on every PR would mean every
+# contributor's every push signs in, mints a standing credential, and creates
+# and deletes objects on a production service — and a third-party fork PR
+# cannot read the secrets anyway, so it would only ever produce noise.
+#
+# So: on demand, plus a schedule. The schedule is the part that matters. The
+# whole reason this workflow exists is that the live spec grew from 189 paths
+# to 233 over six weeks and nothing in the repo noticed, because every API fact
+# here came from a one-off manual probe that was written into a document and
+# never re-run.
+on:
+  workflow_dispatch:
+  schedule:
+    # Mondays and Thursdays at 07:17 UTC. Off the hour on purpose: GitHub's
+    # scheduled-job queue is busiest exactly on the hour.
+    - cron: '17 7 * * 1,4'
+
+# Never let two runs overlap. Both of them would sign in, sweep each other's
+# throwaway objects, and revoke each other's tokens mid-run.
+concurrency:
+  group: contract-tests
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  # Fast, credential-free guard. It re-derives the endpoint inventory from
+  # InterlinedApiClient*.cs and fails if endpoints.manifest.tsv disagrees, so a
+  # broken ledger is caught in seconds instead of after a full live sweep.
+  inventory:
+    name: Endpoint inventory (no credentials)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Verify the endpoint ledger matches the client
+        env:
+          # Forces the env-gated path: the live tests skip, these run.
+          INTERLINEDLIST_CONTRACT_TESTS: 'off'
+        run: >-
+          dotnet test InterlinedList.Contract.Tests/InterlinedList.Contract.Tests.csproj
+          --filter "FullyQualifiedName~EndpointInventoryTests"
+
+  contract:
+    name: Live contract suite
+    runs-on: ubuntu-latest
+    needs: inventory
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # Note the runner: ubuntu, not windows. The suite compile-includes the
+      # app's wire models and API client rather than referencing the
+      # net10.0-windows WPF project, so it is platform-neutral — the same split
+      # that lets InterlinedList.Sync.Core's tests run on macOS/Linux. If this
+      # job ever fails to compile on Linux, something Windows-only leaked into
+      # InterlinedList/Services/InterlinedApiClient*.cs or InterlinedList/Models.
+      - name: Run the live contract suite
+        env:
+          # Absent secrets are empty strings, which the suite reads as
+          # "not configured": every live test skips and the job still passes.
+          # That is the documented contract in .env.example — a fork or a repo
+          # without secrets must not go red.
+          INTERLINEDLIST_EMAIL: ${{ secrets.INTERLINEDLIST_EMAIL }}
+          INTERLINEDLIST_PASSWORD: ${{ secrets.INTERLINEDLIST_PASSWORD }}
+          # Optional; defaults to https://interlinedlist.com. Safe to set with or
+          # without a trailing slash — the suite normalises it, because the naive
+          # concatenation yields a double slash and a 308 redirect.
+          INTERLINEDLIST_API_BASE_URL: ${{ secrets.INTERLINEDLIST_API_BASE_URL }}
+          CONTRACT_DRIFT_REPORT: ${{ github.workspace }}/contract-drift-report.md
+        run: >-
+          dotnet test InterlinedList.Contract.Tests/InterlinedList.Contract.Tests.csproj
+          --logger "console;verbosity=normal"
+
+      - name: Report whether credentials were configured
+        if: always()
+        run: |
+          if [ -z "${{ secrets.INTERLINEDLIST_EMAIL }}" ]; then
+            echo "::notice title=Contract tests skipped::INTERLINEDLIST_EMAIL / INTERLINEDLIST_PASSWORD are not configured as repository secrets, so the live suite skipped. See .env.example for the gh secret set commands."
+          else
+            echo "::notice title=Contract tests ran live::Signed in with the configured test account."
+          fi
+
+      # The drift report is the deliverable. The suite also appends it to the
+      # run's step summary, so drift is visible on the run page without
+      # downloading anything; this keeps a copy for diffing between runs.
+      - name: Upload drift report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: contract-drift-report
+          path: contract-drift-report.md
+          if-no-files-found: warn
