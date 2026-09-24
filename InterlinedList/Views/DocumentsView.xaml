@@ -340,7 +340,7 @@
                               Padding="16,12">
                     <ItemsControl ItemsSource="{Binding RootDocuments}">
                         <ItemsControl.ItemTemplate>
-                            <DataTemplate DataType="{x:Type models:DocumentSummary}">
+                            <DataTemplate DataType="{x:Type models:DocumentFolderEntry}">
                                 <Border Margin="0,0,0,8"
                                         Background="{DynamicResource Surface2Brush}"
                                         BorderBrush="{DynamicResource BorderBrush}"

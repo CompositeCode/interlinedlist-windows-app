@@ -1,0 +1,126 @@
+<UserControl x:Class="InterlinedList.Views.SessionsPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:InterlinedList.ViewModels"
+             xmlns:local="clr-namespace:InterlinedList.Views">
+
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+        <local:NullOrEmptyToVisibilityConverter x:Key="NullOrEmptyToVis"/>
+    </UserControl.Resources>
+
+    <Border Background="{DynamicResource SurfaceBrush}"
+            BorderBrush="{DynamicResource BorderBrush}"
+            BorderThickness="1"
+            CornerRadius="4"
+            Padding="16">
+        <StackPanel>
+            <DockPanel Margin="0,0,0,8">
+                <Button DockPanel.Dock="Right"
+                        Content="Refresh"
+                        Command="{Binding LoadCommand}"
+                        Background="Transparent"
+                        BorderBrush="{DynamicResource BorderBrush}"
+                        BorderThickness="1"
+                        Foreground="{DynamicResource LinkBrush}"
+                        FontSize="11" Padding="8,4" Cursor="Hand"/>
+                <TextBlock Text="API SESSIONS"
+                           FontSize="10" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextMutedBrush}"
+                           VerticalAlignment="Center"/>
+            </DockPanel>
+
+            <TextBlock Text="{Binding Headline}"
+                       FontSize="12"
+                       Foreground="{DynamicResource TextBodyBrush}"
+                       TextWrapping="Wrap"
+                       Margin="0,0,0,10"/>
+
+            <!-- Grouped by device label. A flat list is unusable at the scale
+                 this actually reaches; grouping turns "revoke 1,251 CLI
+                 sessions" into a single decision. -->
+            <ItemsControl ItemsSource="{Binding Groups}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="{x:Type vm:SessionGroupViewModel}">
+                        <Border Background="{DynamicResource Surface2Brush}"
+                                BorderBrush="{DynamicResource BorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="3"
+                                Padding="10,7"
+                                Margin="0,0,0,6">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Margin="0,0,10,0">
+                                    <TextBlock Text="{Binding Label}"
+                                               FontSize="12" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextBrush}"
+                                               TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Text="{Binding Detail}"
+                                               FontFamily="JetBrains Mono, Consolas"
+                                               FontSize="10"
+                                               Foreground="{DynamicResource TextMutedBrush}"
+                                               Margin="0,2,0,0"
+                                               TextWrapping="Wrap"/>
+                                </StackPanel>
+                                <Button Grid.Column="1"
+                                        Content="{Binding RevokeLabel}"
+                                        Command="{Binding RevokeGroupCommand}"
+                                        IsEnabled="{Binding CanRevoke}"
+                                        Background="Transparent"
+                                        BorderBrush="{DynamicResource BorderBrush}"
+                                        BorderThickness="1"
+                                        Foreground="#FFE81123"
+                                        FontSize="11" Padding="8,4"
+                                        VerticalAlignment="Center" Cursor="Hand"/>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <!-- Progress: a full sweep is 1,200+ sequential DELETEs, i.e.
+                 minutes. Without this the panel would look frozen. -->
+            <StackPanel Margin="0,8,0,0"
+                        Visibility="{Binding ProgressText, Converter={StaticResource NullOrEmptyToVis}}">
+                <TextBlock Text="{Binding ProgressText}"
+                           FontFamily="JetBrains Mono, Consolas"
+                           FontSize="10"
+                           Foreground="{DynamicResource TextBodyBrush}"/>
+                <ProgressBar Value="{Binding ProgressFraction}"
+                             Maximum="1"
+                             Height="3"
+                             Margin="0,4,0,0"
+                             Background="{DynamicResource Surface3Brush}"
+                             Foreground="{StaticResource AmberBrush}"
+                             BorderThickness="0"/>
+            </StackPanel>
+
+            <Button Content="{Binding RevokeAllPrompt}"
+                    Command="{Binding RevokeAllOthersCommand}"
+                    Background="Transparent"
+                    BorderBrush="#FFE81123"
+                    BorderThickness="1"
+                    Foreground="#FFE81123"
+                    FontSize="11" Padding="10,5"
+                    HorizontalAlignment="Left" Cursor="Hand"
+                    Margin="0,10,0,0"/>
+
+            <TextBlock Text="{Binding StatusMessage}"
+                       FontSize="11"
+                       Foreground="{DynamicResource TextBodyBrush}"
+                       TextWrapping="Wrap"
+                       Margin="0,8,0,0"
+                       Visibility="{Binding StatusMessage, Converter={StaticResource NullOrEmptyToVis}}"/>
+
+            <TextBlock Text="{Binding ErrorMessage}"
+                       FontSize="11"
+                       Foreground="#FFE81123"
+                       TextWrapping="Wrap"
+                       Margin="0,6,0,0"
+                       Visibility="{Binding ErrorMessage, Converter={StaticResource NullOrEmptyToVis}}"/>
+        </StackPanel>
+    </Border>
+</UserControl>
