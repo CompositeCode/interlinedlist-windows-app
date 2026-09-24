@@ -1,0 +1,137 @@
+# Endpoint ledger for the live contract suite (issue #126).
+#
+# Every (METHOD, PATH) pair that InterlinedList/Services/InterlinedApiClient*.cs
+# calls must appear here exactly once. EndpointInventoryTests re-derives this set
+# from the client sources on every run and fails if the two disagree — so adding
+# an endpoint to the client without classifying it here is a build failure, which
+# is the whole point: the repo can no longer drift away from its own API surface
+# silently.
+#
+# COVERAGE column:
+#   read    - GET, exercised live every run: status + bearer auth + required fields
+#   write   - exercised live, but only against throwaway objects this suite
+#             creates and then deletes (never shared test infrastructure)
+#   auth    - the sign-in call itself; exercised once per run
+#   cleanup - exercised as the suite's own teardown (revokes OUR token, nothing else)
+#   skip    - deliberately NOT exercised. The NOTE says why. These are not
+#             "untested because we were lazy" — they are writes against shared
+#             state, and running them would make this suite a liability.
+#
+# Columns: METHOD <TAB> PATH <TAB> COVERAGE <TAB> NOTE
+POST	api/auth/sync-token	auth	Mints the one token this run uses.
+POST	api/auth/register	skip	Would create a real account on a shared system.
+POST	api/auth/forgot-password	skip	Would send a real password-reset email.
+GET	api/user	read
+PATCH	api/user/update	skip	Would edit the shared test account's profile.
+GET	api/user/sessions	read
+DELETE	api/user/sessions/{id}	cleanup	Revokes only this run's own token (see ContractEnvironment.DisposeAsync).
+GET	api/user/identities	read
+DELETE	api/user/identities	skip	CLAUDE.md records RemoveIdentityAsync as deliberately never exercised live; unlinking an OAuth identity is not re-creatable from a test.
+GET	api/user/notification-preferences	read
+PATCH	api/user/notification-preferences	skip	Would change the account's notification settings.
+GET	api/user/blocks	read
+GET	api/user/mutes	read
+GET	api/user/organizations	read
+POST	api/user/avatar/from-url	skip	Would replace the account's avatar.
+POST	api/user/avatar/upload	skip	Would replace the account's avatar and push a file to shared storage.
+POST	api/user/change-email/request	skip	Would send a real confirmation email and stage an address change.
+POST	api/user/delete	skip	Deletes the account. Never exercised, for obvious reasons.
+GET	api/user/{username}/messages	read	Note the SINGULAR "user" here - profile and lists use "users". Asserted, because it is an easy thing to "tidy" into a 404.
+GET	api/users/search	read
+GET	api/users/{username}	read
+GET	api/users/{username}/lists	read
+GET	api/users/{username}/block	read	Read-only block-state probe.
+POST	api/users/{username}/block	skip	Would block a real user.
+DELETE	api/users/{username}/block	skip	Paired with the POST above.
+GET	api/users/{username}/mute	read	Read-only mute-state probe.
+POST	api/users/{username}/mute	skip	Would mute a real user.
+DELETE	api/users/{username}/mute	skip	Paired with the POST above.
+POST	api/users/{username}/report	skip	Would file a real moderation report against a real person.
+GET	api/messages	read
+POST	api/messages	skip	Issue #126 explicitly forbids posting messages.
+GET	api/messages/{id}	read
+PATCH	api/messages/{id}	skip	Would edit a real post.
+DELETE	api/messages/{id}	skip	Would delete a real post.
+GET	api/messages/{id}/replies	read
+POST	api/messages/{id}/report	skip	Would file a real moderation report.
+POST	api/messages/{messageId}/dig	skip	Alters public engagement counts; CLAUDE.md flags DigAsync's response as unparsed.
+DELETE	api/messages/{messageId}/dig	skip	Paired with the POST above.
+GET	api/messages/search	read
+GET	api/messages/scheduled	read
+POST	api/messages/images/upload	skip	Would push a file to shared media storage with no delete endpoint.
+POST	api/messages/videos/upload	skip	Would push a file to shared media storage with no delete endpoint.
+GET	api/notifications	read
+POST	api/notifications/mark-all-read	skip	Destroys unread state that cannot be restored.
+PATCH	api/notifications/{id}/read	skip	Same - unread state is not re-creatable.
+DELETE	api/notifications/{id}	skip	Permanently removes a real notification.
+GET	api/lists	read
+POST	api/lists	write	Creates a throwaway list, deleted in the same test.
+GET	api/lists/{listId}	read
+PUT	api/lists/{listId}	write	Against the throwaway list only.
+DELETE	api/lists/{listId}	write	Deletes the throwaway list.
+GET	api/lists/{listId}/data	read
+POST	api/lists/{listId}/data	write	Row added to the throwaway list.
+PUT	api/lists/{listId}/data/{rowId}	write	Row edited on the throwaway list.
+DELETE	api/lists/{listId}/data/{rowId}	write	Row deleted from the throwaway list.
+GET	api/lists/{listId}/share-links	read
+POST	api/lists/{listId}/share-links	write	Share link on the throwaway list, revoked in the same test.
+DELETE	api/lists/{listId}/share-links/{token}	write	Revokes the link created above.
+GET	api/lists/{listId}/watchers	read
+POST	api/lists/{listId}/watchers	skip	Would grant a real third-party user access to a list.
+DELETE	api/lists/{listId}/watchers/{userId}	skip	Paired with the POST above.
+GET	api/lists/{listId}/watchers/users	read
+GET	api/lists/watching	read
+GET	api/lists/search	read
+GET	api/documents	read
+POST	api/documents	write	Creates a throwaway document, deleted in the same test.
+GET	api/documents/{id}	read
+PATCH	api/documents/{id}	write	Against the throwaway document only.
+DELETE	api/documents/{id}	write	Deletes the throwaway document.
+GET	api/documents/{documentId}/share-links	read
+POST	api/documents/{documentId}/share-links	write	Share link on the throwaway document, revoked in the same test.
+DELETE	api/documents/{documentId}/share-links/{token}	write	Revokes the link created above.
+GET	api/documents/{documentId}/collaborators	read
+POST	api/documents/{documentId}/collaborators	skip	Would grant a real third-party user access to a document.
+DELETE	api/documents/{documentId}/collaborators/{userId}	skip	Paired with the POST above.
+GET	api/documents/{documentId}/collaborators/users	read
+GET	api/documents/folders	read
+POST	api/documents/folders	write	Creates a throwaway folder, deleted in the same test.
+PUT	api/documents/folders/{id}	write	Renames the throwaway folder.
+DELETE	api/documents/folders/{id}	write	Deletes the throwaway folder.
+POST	api/documents/folders/{folderId}/documents	write	Creates a throwaway document inside the throwaway folder.
+GET	api/documents/templates	read
+POST	api/documents/from-template	skip	Creates a document from a shared template, and the client does not parse the response, so the suite would have no id to delete. Materialising it by title match is too fragile to be worth the mess it could leave behind.
+GET	api/documents/search	read
+GET	api/organizations	read
+POST	api/organizations	skip	CLAUDE.md records CreateOrganizationAsync as deliberately never exercised live; organizations are shared test infrastructure.
+GET	api/organizations/{id}	read
+PUT	api/organizations/{orgId}	skip	Would edit a shared organization.
+DELETE	api/organizations/{orgId}	skip	Would delete a shared organization.
+GET	api/organizations/{orgId}/members	read
+POST	api/organizations/{orgId}/members	skip	Would add a real user to a shared organization.
+PUT	api/organizations/{orgId}/members/{userId}	skip	Would change a real member's role.
+DELETE	api/organizations/{orgId}/members/{userId}	skip	Would remove a real member.
+GET	api/dm/recipients	read
+GET	api/dm/thread/{username}	read
+GET	api/dm/thread/{username}/updates	read
+GET	api/dm/unread-count	read
+POST	api/dm	skip	Issue #126 explicitly forbids sending DMs.
+POST	api/dm/{id}/read	skip	Mutates a real conversation's read state.
+POST	api/dm/{id}/trash	skip	Mutates a real conversation.
+POST	api/dm/{id}/restore	skip	Paired with the trash call above.
+POST	api/dm/images/upload	skip	Would push a file to shared media storage.
+GET	api/follow/requests	read
+GET	api/follow/{userId}/status	read
+GET	api/follow/{userId}/counts	read
+GET	api/follow/{userId}/followers	read
+GET	api/follow/{userId}/following	read
+GET	api/follow/{userId}/mutual	read
+POST	api/follow/{userId}	skip	Would mutate the real social graph.
+DELETE	api/follow/{userId}	skip	Would mutate the real social graph.
+POST	api/follow/{userId}/approve	skip	Would approve a real pending follow request.
+POST	api/follow/{userId}/reject	skip	Would reject a real pending follow request.
+DELETE	api/follow/{userId}/remove	skip	Would remove a real follower.
+GET	api/exports/messages	read	CSV, not JSON - asserted on the header row.
+GET	api/exports/lists	read	CSV, not JSON - asserted on the header row.
+GET	api/exports/list-data-rows	read	CSV, not JSON - asserted on the header row.
+GET	api/exports/follows	read	CSV, not JSON - asserted on the header row.
