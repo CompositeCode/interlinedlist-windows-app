@@ -428,40 +428,22 @@
                         </StackPanel>
                     </Border>
 
-                    <!-- Mutual connections -->
-                    <StackPanel Margin="0,0,0,12"
-                                Visibility="{Binding HasMutuals, Converter={StaticResource BoolToVis}}">
-                        <TextBlock Text="Mutual connections"
-                                   FontSize="12" FontWeight="SemiBold"
-                                   Foreground="{DynamicResource TextBrush}" Margin="0,0,0,6"/>
-                        <ItemsControl ItemsSource="{Binding Mutuals}">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Button Command="{Binding DataContext.OpenUserCommand,
-                                                      RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                            CommandParameter="{Binding}"
-                                            Background="Transparent" BorderThickness="0" Cursor="Hand"
-                                            Margin="0,0,6,6" Padding="0">
-                                        <Border Background="{DynamicResource Surface2Brush}"
-                                                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
-                                                CornerRadius="3" Padding="8,4">
-                                            <StackPanel Orientation="Horizontal">
-                                                <Border Width="18" Height="18" CornerRadius="999" ClipToBounds="True"
-                                                        Background="{DynamicResource Surface3Brush}" Margin="0,0,6,0">
-                                                    <Image Source="{Binding Avatar}" Stretch="UniformToFill"/>
-                                                </Border>
-                                                <TextBlock Text="{Binding DisplayNameOrUsername}" FontSize="11"
-                                                           Foreground="{DynamicResource TextBodyBrush}" VerticalAlignment="Center"/>
-                                            </StackPanel>
-                                        </Border>
-                                    </Button>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </StackPanel>
+                    <!-- Mutual follows. Counts only: the API has no endpoint
+                         that lists the mutual users, so the clickable chips that
+                         used to be here could never render anything (#160). -->
+                    <Border Margin="0,0,0,12"
+                            Background="{DynamicResource Surface2Brush}"
+                            BorderBrush="{DynamicResource BorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="3"
+                            Padding="10,6"
+                            Visibility="{Binding HasMutuals, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Text="{Binding MutualsSummary}"
+                                   FontFamily="JetBrains Mono, Consolas"
+                                   FontSize="10"
+                                   Foreground="{DynamicResource TextBodyBrush}"
+                                   TextWrapping="Wrap"/>
+                    </Border>
 
                     <!-- Followers / following. Paged: the server's default page
                          is 50, so anyone with more had the rest silently dropped.

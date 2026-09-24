@@ -39,6 +39,31 @@ public sealed partial class InterlinedApiClient
     public Task<List<FollowUser>> GetFollowingAsync(string userId, CancellationToken ct = default)
         => GetUserArrayAsync($"api/follow/{userId}/following", "following", ct);
 
+    /// <summary>
+    /// Mutual-follow <b>counts</b> between the caller and <paramref name="userId"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This replaces a <c>Task&lt;List&lt;FollowUser&gt;&gt;</c> signature that the API
+    /// cannot satisfy. The endpoint returns
+    /// <c>{"mutualFollowers":n,"mutualFollowing":n}</c> — never a user array —
+    /// so the old call asked <see cref="GetUserArrayAsync"/> for an absent
+    /// <c>mutual</c> key and silently received an empty list, which is why the
+    /// profile's "Mutual connections" chips never rendered. See #160.
+    /// </para>
+    /// <para>
+    /// There is <b>no</b> endpoint that lists the mutual users — both this
+    /// route's parameter forms (bare, and with the spec-documented
+    /// <c>otherUserId</c>) return the same counts object.
+    /// </para>
+    /// </remarks>
+    public async Task<MutualFollowCounts> GetMutualCountsAsync(string userId, CancellationToken ct = default)
+    {
+        var json = await GetElementAsync($"api/follow/{userId}/mutual", ct);
+        return json.ValueKind == JsonValueKind.Object
+            ? json.Deserialize<MutualFollowCounts>(JsonOptions) ?? MutualFollowCounts.None
+            : MutualFollowCounts.None;
+    }
     /// <summary>One page of a user's followers.</summary>
     /// <param name="status">
     /// Optional server-side filter on the follow edge's state. Live values seen:
@@ -62,11 +87,15 @@ public sealed partial class InterlinedApiClient
         string userId, int limit = 50, int offset = 0, string? status = null, CancellationToken ct = default)
         => GetUserPageAsync($"api/follow/{userId}/following", "following", limit, offset, status, ct);
 
-    public Task<List<FollowUser>> GetMutualAsync(string userId, CancellationToken ct = default)
-        => GetUserArrayAsync($"api/follow/{userId}/mutual", "mutual", ct);
-
-    // Follow lists wrap their array under different property names
-    // (requests/followers/following/mutual) — pull the named array, tolerate a miss.
+    // Follow lists wrap their array under different property names — pull the
+    // named array, tolerate a miss.
+    //
+    // Keys verified live 2026-09-16: `requests` -> {"requests":[]},
+    // `followers`/`following` -> {"<key>":[…],"pagination":{…}}. NOTE `mutual`
+    // is NOT one of these — that endpoint returns counts, not an array, and
+    // this helper's tolerance silently hid the mismatch for weeks (#160). If you
+    // add a key here, confirm the array actually exists in a live payload; a
+    // wrong key fails as "feature renders nothing", not as an error.
     private async Task<List<FollowUser>> GetUserArrayAsync(string path, string property, CancellationToken ct)
     {
         var json = await GetElementAsync(path, ct);
