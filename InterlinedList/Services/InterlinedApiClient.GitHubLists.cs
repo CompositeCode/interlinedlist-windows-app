@@ -5,8 +5,8 @@ using InterlinedList.Models;
 namespace InterlinedList.Services;
 
 /// <summary>
-/// Where lists meet GitHub: creating a GitHub-backed list and reading a list's
-/// GitHub backing.
+/// Where lists meet GitHub: creating a GitHub-backed list, reading a list's
+/// GitHub backing, and "Refresh from GitHub".
 ///
 /// <para>
 /// Kept in its own partial rather than folded into
@@ -21,15 +21,19 @@ namespace InterlinedList.Services;
 /// <para>
 /// <b>Live-probe record, 2026-09-16</b> (test account, bearer sync-token). No
 /// GitHub-backed list was created — doing so would link a real GitHub repository
-/// on shared test infrastructure — so the create <em>success</em> path is built
-/// and unexercised. What was verified, with a throwaway list titled
-/// "ZZ claude-probe …" that was deleted and confirmed gone afterwards:
+/// on shared test infrastructure — so the create and refresh <em>success</em>
+/// paths are built and unexercised. What was verified, with a throwaway list
+/// titled "ZZ claude-probe …" that was deleted and confirmed gone afterwards:
 /// </para>
 /// <list type="bullet">
 /// <item><description><c>POST /api/lists { title, source: "github" }</c> and no
 /// <c>githubRepo</c> → <b>400</b> "githubRepo is required for GitHub-backed
 /// lists (format: owner/repo)", <b>and nothing was created</b>. The server does
 /// understand <c>source: "github"</c>.</description></item>
+/// <item><description><c>POST /api/lists/{id}/refresh</c> on a <c>local</c> list
+/// → <b>400</b> "Refresh is only available for GitHub-backed lists". Re-reading
+/// the list gave an identical body with an unchanged <c>updatedAt</c>, so the
+/// rejection is inert.</description></item>
 /// <item><description><c>GET /api/lists</c> really does carry
 /// <c>source</c>/<c>githubRepo</c>/<c>githubRepoPrivate</c> on every list
 /// (<c>"local"</c>/<c>null</c>/<c>null</c> for the account's one
@@ -97,6 +101,39 @@ public sealed partial class InterlinedApiClient
 
         var json = await SendElementAsync(HttpMethod.Post, "api/lists", payload, ct);
         return GitHubBackedListCreated.FromJson(json);
+    }
+
+    /// <summary>
+    /// "Refresh from GitHub" — <c>POST /api/lists/{id}/refresh</c>, re-pulling the
+    /// repository's issues into the list's rows and re-reading the repository's
+    /// public/private visibility.
+    /// <para>
+    /// A <c>local</c> list answers <c>400</c> "Refresh is only available for
+    /// GitHub-backed lists" (verified live, and inert — nothing changed), so gate
+    /// the action on <see cref="GitHubListBacking.IsGitHubBacked"/> and treat that
+    /// 400 as a state error rather than something to retry. The success body is
+    /// unverified; re-read the list and its rows afterwards.
+    /// </para>
+    /// </summary>
+    public async Task<ListRefreshResult> RefreshListFromGitHubAsync(string listId, CancellationToken ct = default)
+    {
+        using var resp = await SendAsync(HttpMethod.Post, $"api/lists/{listId}/refresh", new { }, ct);
+        await EnsureSuccessAsync(resp, ct);
+
+        // A 2xx with an empty body is possible and is not an error here — the
+        // caller re-reads the list for truth either way.
+        var text = await resp.Content.ReadAsStringAsync(ct);
+        if (string.IsNullOrWhiteSpace(text))
+            return new ListRefreshResult();
+
+        try
+        {
+            return ListRefreshResult.FromJson(JsonSerializer.Deserialize<JsonElement>(text, JsonOptions));
+        }
+        catch (JsonException)
+        {
+            return new ListRefreshResult { Message = "Refreshed from GitHub." };
+        }
     }
 
     /// <summary>
