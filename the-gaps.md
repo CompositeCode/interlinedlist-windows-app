@@ -1,5 +1,42 @@
 # The Gaps — InterlinedList Windows App vs. interlinedlist.com
 
+> ## ⚠️ RE-BASELINED 2026-09-15 — the conclusion below is out of date
+>
+> Session 7 (2026-08-01) concluded *"✅ Effective feature parity reached"*. That
+> was true **against the API as it then was**. The product has since moved: the
+> live OpenAPI spec went from **189 paths / 244 operations** to **233 paths /
+> 304 operations**, and the app now implements **115 of 259** in-scope
+> operations.
+>
+> **Three whole pillars were added that this document does not mention:**
+> **AI Writing Assistance** (`/api/ai/*`), **Application Settings & Devices**
+> (`/api/user/app-settings/*` — built for native clients; this app is the
+> intended consumer), and **Tags** (`/api/tags/*`). Plus list saved views,
+> list/document email invites, list grid presence, `/api/limits`,
+> `/api/link-metadata`, and the transit widget.
+>
+> **Four of the five "genuinely blocked, not merely unbuilt" items in §Session 7
+> are no longer blocked:**
+>
+> | Session 7 said | Reality 2026-09-15 |
+> |---|---|
+> | Materialize — *"opaque `source` string ... API-blocked"* | **Fully documented** at `/help/api/create-from` — 5 source kinds, 4 targets, full config objects |
+> | Per-list schema DSL — *"only partially reverse-engineered ... API-blocked"* | **Fully documented** at `/help/api/lists-dsl` — 12 field types, validation, conditional visibility |
+> | GitHub — *"every `/api/github/*` call returns 'GitHub account not linked'"* | `GET /api/github/repos` and `/orgs` return **`200 []`** — buildable against the empty state |
+> | DM inbox-folder — *"`GET /api/dm` item shape can't be learned"* | `GET /api/dm/conversations` is documented and returns **`200 {"items":[],"nextCursor":null}`** |
+> | Billing UI — *"cookie-session-only"* | **Still true.** Confirmed `cookieAuth` in the spec; stays a browser handoff |
+>
+> Also corrected: `GET /api/user/engagement` and `GET`/`PUT
+> /api/user/dashboard-layout` return **200** with the bearer token (both were
+> documented as `401`-walled).
+>
+> **The current backlog lives in GitHub issues #8–#128** (19 epics, 102 linked
+> sub-issues). Treat this file as the historical record of sessions 1–7, not as
+> the current gap list. The methodology note below still stands — and the
+> lesson is in §5.2: *re-probe the auth model per endpoint*, because a one-off
+> probe written into a doc goes stale silently.
+
+
 > **Generated:** 2026-07-31 · **Method:** compared the app's implemented API
 > surface (`InterlinedList/Services/InterlinedApiClient*.cs`) against the live
 > OpenAPI 3.1 spec (`https://interlinedlist.com/api/openapi.json` — **189 paths,
