@@ -252,7 +252,10 @@ public partial class SettingsViewModel : ObservableObject
         try
         {
             await _session.Api.DeleteAccountAsync(user.Username, user.Email);
-            _session.Logout();
+            // Local-only teardown on purpose: the account (and with it every
+            // sync-token it owned) is already gone, so POST /api/auth/logout and
+            // the session-revoke call would just be two 401s on the way out.
+            _session.ClearLocalSession();
             Navigator.RequestLogout();
         }
         catch (InterlinedApiException ex)

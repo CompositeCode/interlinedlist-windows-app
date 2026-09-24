@@ -205,6 +205,53 @@
                                Margin="0,4,0,0"/>
                 </StackPanel>
             </Border>
+
+            <!-- LinkedIn pages. Syncing is the prerequisite for having any
+                 LinkedIn destination to post to. The status line distinguishes
+                 "not connected" from "connected but no pages synced", which an
+                 empty target list alone cannot: /api/linkedin/targets returns
+                 200 {"targets":[]} either way. -->
+            <Border Background="{DynamicResource SurfaceBrush}"
+                    BorderBrush="{DynamicResource BorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="4"
+                    Padding="16"
+                    Margin="0,0,0,12">
+                <StackPanel>
+                    <TextBlock Text="LINKEDIN PAGES"
+                               FontSize="10" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextMutedBrush}"
+                               Margin="0,0,0,8"/>
+
+                    <TextBlock Text="{Binding LinkedInStatus}"
+                               FontSize="12"
+                               Foreground="{DynamicResource TextBodyBrush}"
+                               TextWrapping="Wrap"
+                               Margin="0,0,0,8"/>
+
+                    <ItemsControl ItemsSource="{Binding LinkedInTargets}" Margin="0,0,0,8">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type models:LinkedInTarget}">
+                                <Border Background="{DynamicResource Surface2Brush}"
+                                        BorderBrush="{DynamicResource BorderBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="3"
+                                        Padding="8,5"
+                                        Margin="0,0,0,4">
+                                    <TextBlock Text="{Binding Label}"
+                                               FontSize="11"
+                                               Foreground="{DynamicResource TextBodyBrush}"/>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <Button Content="Sync LinkedIn pages"
+                            Command="{Binding SyncLinkedInPagesCommand}"
+                            Style="{StaticResource PrimaryBtnStyle}"
+                            HorizontalAlignment="Left"/>
+                </StackPanel>
+            </Border>
         </StackPanel>
     </ScrollViewer>
 </UserControl>

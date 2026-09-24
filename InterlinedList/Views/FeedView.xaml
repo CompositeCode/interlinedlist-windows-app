@@ -398,8 +398,12 @@
                                                        HorizontalAlignment="Right"/>
                                         </DockPanel>
 
-                                        <!-- Body (a bare Push has none — collapse it) -->
-                                        <TextBlock Text="{Binding Content}"
+                                        <!-- Body. MentionText renders @mentions as
+                                             clickable links (#94); the Visibility
+                                             binding below collapses this for a bare
+                                             Push, which carries no commentary (#31).
+                                             Both belong on this one element. -->
+                                        <TextBlock local:MentionText.Text="{Binding Content}"
                                                    FontSize="13"
                                                    Foreground="{DynamicResource TextBodyBrush}"
                                                    TextWrapping="Wrap"
@@ -627,7 +631,7 @@
                                                                            Foreground="{DynamicResource TextMutedBrush}"
                                                                            HorizontalAlignment="Right"/>
                                                             </DockPanel>
-                                                            <TextBlock Text="{Binding Content}" FontSize="12"
+                                                            <TextBlock local:MentionText.Text="{Binding Content}" FontSize="12"
                                                                        Foreground="{DynamicResource TextBodyBrush}"
                                                                        TextWrapping="Wrap" LineHeight="18"/>
                                                         </StackPanel>
@@ -667,7 +671,7 @@
                                   <StackPanel>
                                       <TextBlock Text="⏱ Scheduled" FontSize="10" FontWeight="SemiBold"
                                                  Foreground="{StaticResource AmberBrush}" Margin="0,0,0,4"/>
-                                      <TextBlock Text="{Binding Content}" FontSize="13"
+                                      <TextBlock local:MentionText.Text="{Binding Content}" FontSize="13"
                                                  Foreground="{DynamicResource TextBodyBrush}" TextWrapping="Wrap"/>
                                   </StackPanel>
                               </Border>
