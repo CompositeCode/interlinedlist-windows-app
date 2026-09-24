@@ -64,6 +64,28 @@ public sealed partial class InterlinedApiClient
             ? json.Deserialize<MutualFollowCounts>(JsonOptions) ?? MutualFollowCounts.None
             : MutualFollowCounts.None;
     }
+    /// <summary>One page of a user's followers.</summary>
+    /// <param name="status">
+    /// Optional server-side filter on the follow edge's state. Live values seen:
+    /// <c>approved</c>; <c>pending</c> is accepted and returns an empty page on an
+    /// account with no requests. Documented in the spec alongside <c>limit</c>.
+    /// </param>
+    /// <remarks>
+    /// Verified live 2026-09-16: the envelope is
+    /// <c>{followers:[…], pagination:{total,limit,offset,hasMore}}</c>, the
+    /// server default limit is <b>50</b>, and <c>limit</c>+<c>offset</c> both
+    /// work (<c>?limit=2&amp;offset=1</c> returned rows 2–3 of 8 with
+    /// <c>hasMore:true</c>). Note <c>offset</c> is functional but <b>not</b> in
+    /// the spec's parameter list — same situation as <c>GET /api/messages</c>.
+    /// </remarks>
+    public Task<FollowUserPage> GetFollowersPageAsync(
+        string userId, int limit = 50, int offset = 0, string? status = null, CancellationToken ct = default)
+        => GetUserPageAsync($"api/follow/{userId}/followers", "followers", limit, offset, status, ct);
+
+    /// <summary>One page of the accounts a user follows.</summary>
+    public Task<FollowUserPage> GetFollowingPageAsync(
+        string userId, int limit = 50, int offset = 0, string? status = null, CancellationToken ct = default)
+        => GetUserPageAsync($"api/follow/{userId}/following", "following", limit, offset, status, ct);
 
     // Follow lists wrap their array under different property names — pull the
     // named array, tolerate a miss.
@@ -80,5 +102,33 @@ public sealed partial class InterlinedApiClient
         return json.TryGetProperty(property, out var arr) && arr.ValueKind == JsonValueKind.Array
             ? arr.Deserialize<List<FollowUser>>(JsonOptions) ?? new()
             : new();
+    }
+
+    // Same envelope, but keeping the pagination block so a caller can page
+    // rather than silently taking the server's first 50.
+    private async Task<FollowUserPage> GetUserPageAsync(
+        string path, string property, int limit, int offset, string? status, CancellationToken ct)
+    {
+        var query = $"?limit={limit}&offset={offset}";
+        if (status is { Length: > 0 })
+            query += $"&status={Uri.EscapeDataString(status)}";
+
+        var json = await GetElementAsync(path + query, ct);
+
+        var users = json.TryGetProperty(property, out var arr) && arr.ValueKind == JsonValueKind.Array
+            ? arr.Deserialize<List<FollowUser>>(JsonOptions) ?? []
+            : [];
+
+        var pagination = json.TryGetProperty("pagination", out var p) && p.ValueKind == JsonValueKind.Object
+            ? p.Deserialize<Pagination>(JsonOptions)
+            : null;
+
+        return new FollowUserPage
+        {
+            Users = users,
+            Total = pagination?.Total ?? users.Count,
+            // hasMore is authoritative; fall back to a full page meaning "maybe more".
+            HasMore = pagination?.HasMore ?? users.Count >= limit,
+        };
     }
 }
