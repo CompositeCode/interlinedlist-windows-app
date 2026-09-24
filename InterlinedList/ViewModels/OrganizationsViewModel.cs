@@ -47,6 +47,18 @@ public partial class OrganizationsViewModel : ObservableObject
     [ObservableProperty]
     private bool canDeleteOrganization;
 
+    /// <summary>
+    /// Owner-only, and deliberately narrower than <see cref="CanManageMembers"/>:
+    /// <c>GET /api/organizations/{id}/users</c> rejects an admin with
+    /// <c>403 "Only organization owners can search for users to add"</c>.
+    /// </summary>
+    [ObservableProperty]
+    private bool canSearchCandidates;
+
+    /// <summary>Set when a search returned nobody addable, so the view can say so.</summary>
+    [ObservableProperty]
+    private bool noCandidatesFound;
+
     // ── Add-member search ───────────────────────────────────────────────────
     [ObservableProperty]
     private string memberSearchQuery = "";
@@ -167,6 +179,12 @@ public partial class OrganizationsViewModel : ObservableObject
             var myRole = mine?.Role;
             CanManageMembers = myRole is "owner" or "admin";
             CanDeleteOrganization = myRole is "owner";
+            // Candidate search is stricter than the rest of member management:
+            // GET /api/organizations/{id}/users is OWNER-only and returns 403
+            // "Only organization owners can search for users to add" to an
+            // admin (verified live 2026-09-16). Gate it separately so an admin
+            // isn't handed a search box that always fails.
+            CanSearchCandidates = myRole is "owner";
         }
         catch (InterlinedApiException ex)
         {
@@ -237,18 +255,33 @@ public partial class OrganizationsViewModel : ObservableObject
 
     // ── Add member (user search → add) ──────────────────────────────────────
 
-    private bool CanSearchUsers() => !string.IsNullOrWhiteSpace(MemberSearchQuery);
+    private bool CanSearchUsers() =>
+        !string.IsNullOrWhiteSpace(MemberSearchQuery) && CanSearchCandidates;
 
     [RelayCommand(CanExecute = nameof(CanSearchUsers))]
     private async Task SearchUsersAsync()
     {
         UserSearchResults.Clear();
+
+        var org = SelectedOrganization;
+        if (org is null)
+            return;
+
         IsSearchingUsers = true;
         try
         {
-            var page = await _session.Api.SearchUsersAsync(MemberSearchQuery.Trim());
-            foreach (var user in page.Users)
+            // The org-scoped endpoint, not the global user search — it's the one
+            // the product intends for this picker.
+            var candidates = await _session.Api.SearchOrgCandidateUsersAsync(
+                org.Id, MemberSearchQuery.Trim());
+
+            // Don't offer people who are already in the org; adding them again
+            // is a guaranteed failure the user shouldn't be invited to attempt.
+            var existing = Members.Select(m => m.Id).ToHashSet(StringComparer.Ordinal);
+            foreach (var user in candidates.Where(u => !existing.Contains(u.Id)))
                 UserSearchResults.Add(user);
+
+            NoCandidatesFound = UserSearchResults.Count == 0;
             ErrorMessage = null;
         }
         catch (InterlinedApiException ex)
@@ -350,6 +383,12 @@ public partial class OrganizationsViewModel : ObservableObject
     }
 
     partial void OnNewOrgNameChanged(string value) => CreateOrganizationCommand.NotifyCanExecuteChanged();
-    partial void OnMemberSearchQueryChanged(string value) => SearchUsersCommand.NotifyCanExecuteChanged();
+    partial void OnMemberSearchQueryChanged(string value)
+    {
+        NoCandidatesFound = false;
+        SearchUsersCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnCanSearchCandidatesChanged(bool value) => SearchUsersCommand.NotifyCanExecuteChanged();
     partial void OnEditOrgNameChanged(string value) => SaveOrganizationCommand.NotifyCanExecuteChanged();
 }

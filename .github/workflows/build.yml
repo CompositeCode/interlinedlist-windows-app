@@ -21,6 +21,14 @@ jobs:
       - name: Build WPF app
         run: dotnet build InterlinedList/InterlinedList.csproj -c Release -r win-x64
 
+      - name: Build sync engine + tray utility
+        run: |
+          dotnet build InterlinedList.Sync.Core/InterlinedList.Sync.Core.csproj -c Release
+          dotnet build InterlinedList.Sync/InterlinedList.Sync.csproj -c Release -r win-x64
+
+      - name: Test sync engine
+        run: dotnet test InterlinedList.Sync.Core.Tests/InterlinedList.Sync.Core.Tests.csproj -c Release
+
   build-msi:
     name: Build MSI installer
     runs-on: windows-latest
@@ -34,6 +42,9 @@ jobs:
 
       - name: Publish app (installer payload)
         run: dotnet publish InterlinedList/InterlinedList.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=false
+
+      - name: Publish sync utility (into the same payload folder)
+        run: dotnet publish InterlinedList.Sync/InterlinedList.Sync.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=false -o InterlinedList/bin/Release/net10.0-windows/win-x64/publish
 
       - name: Build MSI
         run: dotnet build installer/InterlinedList.Installer.wixproj -c Release
