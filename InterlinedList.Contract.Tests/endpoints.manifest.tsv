@@ -135,3 +135,54 @@ GET	api/exports/messages	read	CSV, not JSON - asserted on the header row.
 GET	api/exports/lists	read	CSV, not JSON - asserted on the header row.
 GET	api/exports/list-data-rows	read	CSV, not JSON - asserted on the header row.
 GET	api/exports/follows	read	CSV, not JSON - asserted on the header row.
+
+# ── Added 2026-09-24: endpoints introduced by the parity merge pass ─────────
+# The suite caught these itself — the inventory test failed with 46 unclassified
+# endpoints after the AI, app-settings, GitHub, widgets, DM, materialize,
+# schema and auth work landed. That failure is the feature working.
+GET	api/limits	read
+GET	api/ai/status	read
+GET	api/user/engagement	read
+GET	api/documents/tree	read
+GET	api/dm	read
+GET	api/dm/conversations	read
+GET	api/linkedin/targets	read
+GET	api/auth/github/status	read
+GET	api/github/repos	read
+GET	api/github/orgs	read
+GET	api/widgets/news	read
+GET	api/widgets/markets	read
+GET	api/widgets/transit	read
+GET	api/widgets/transit/stops	read
+GET	api/widgets/bike-share	read
+GET	api/user/app-settings/{appKey}	read
+GET	api/user/app-settings/{appKey}/devices	read
+GET	api/user/app-settings/{appKey}/bootstrap	read
+GET	api/dm/{id}	skip	Needs a real DM id; the account's only message sits in the deleted folder and reading it would require un-trashing someone's message.
+GET	api/lists/{listId}/schema	skip	Safe in itself, but the suite has no list it owns; probing the account's single real list risks confusion with a user's own data.
+GET	api/organizations/{orgId}/users	skip	Owner-only (403 as a member). The test account is only a member of all three of its organizations, so the success path is unreachable without creating one.
+GET	api/users/lookup	skip	Needs a handle to resolve; covered indirectly by the profile probes and not worth a second standing dependency on another user's account existing.
+GET	api/github/repos/{owner}/{repo}/assignees	skip	Needs a repo the linked GitHub account can see; it owns none, so this would assert against a third party's repository.
+GET	api/github/repos/{owner}/{repo}/labels	skip	Same as assignees — needs a repo the linked account can see.
+GET	api/github/repos/{owner}/{repo}/next-issue-number	skip	Same as assignees — needs a repo the linked account can see.
+GET	api/github/issues	skip	Requires ?repo=owner/repo or a githubDefaultRepo (400 otherwise); the account has neither, so there is nothing to read without pointing at a third party's repository.
+GET	api/user/app-settings/{appKey}/devices/{deviceId}/settings	skip	Requires a registered device, which means a write. Covered by the app-settings write probes instead.
+POST	api/user/app-settings/{appKey}/devices	write	Registers a device under a throwaway appKey, deleted in cleanup.
+PATCH	api/user/app-settings/{appKey}/devices/{deviceId}	write	Renames the throwaway device.
+DELETE	api/user/app-settings/{appKey}/devices/{deviceId}	write	Deregisters the throwaway device.
+PUT	api/user/app-settings/{appKey}	write	Writes the throwaway appKey's account document; exercises the compare-and-swap path.
+PUT	api/user/app-settings/{appKey}/devices/{deviceId}/settings	write	Writes the throwaway device's document.
+DELETE	api/user/app-settings/{appKey}	write	Deletes the throwaway appKey's document — this is the cleanup for the writes above.
+POST	api/ai/suggest	skip	Costs one of fifty daily AI quota units per call, including failures. A scheduled suite would exhaust a real user's allowance.
+POST	api/ai/generate	skip	Persists AI-generated lists, documents or scheduled posts to a shared account.
+POST	api/materialize	skip	Creates real lists and documents from existing content.
+PUT	api/lists/{listId}/schema	skip	Destructive: the DSL form wipes and recreates every column and overwrites the list title and description.
+POST	api/github/issues	skip	Creates a real issue in a real GitHub repository.
+PATCH	api/github/issues/{owner}/{repo}/{number}	skip	Modifies a real GitHub issue.
+POST	api/github/issues/{owner}/{repo}/{number}/comments	skip	Comments on a real GitHub issue.
+POST	api/linkedin/sync-pages	skip	Touches the account's LinkedIn integration; returns 400 not_linked here, and on a linked account would re-sync a real user's pages.
+POST	api/auth/logout	skip	No-op for a bearer client (verified: 200 with no Authorization header, token stays valid), so it asserts nothing while still hitting an auth endpoint.
+POST	api/auth/reset-password	skip	A successful reset would change the shared account's password and lock out CI and every other client.
+POST	api/auth/verify-email	skip	Consumes a single-use emailed token; no token is obtainable without a mailbox.
+POST	api/auth/verify-email-change	skip	Consumes a single-use emailed token, and would change the account's address.
+POST	api/auth/undo-email-change	skip	Would reverse a real pending email change.

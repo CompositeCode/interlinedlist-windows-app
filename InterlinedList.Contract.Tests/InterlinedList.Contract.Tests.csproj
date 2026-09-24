@@ -62,10 +62,35 @@
   <!-- The app's portable source, compiled straight into the test assembly.
        Link metadata keeps the IDE tree tidy. -->
   <ItemGroup>
+    <!-- The app is net10.0-windows (WPF) and cannot be referenced from a test
+         project that runs on Linux CI, so its PORTABLE source is compile-included
+         instead. That keeps the tests driving the real client and real model
+         types — the models' `required` properties make System.Text.Json itself
+         perform the field-presence assertion.
+
+         Services/ is globbed with exclusions rather than enumerated file by
+         file. Enumerating broke twice as the app grew (CursorPager.cs,
+         ListSchemaException.cs, AiApiException.cs were each missed), because a
+         new portable file is invisible here until it fails to compile. A glob
+         inverts that: new portable files are picked up automatically, and only
+         the three genuinely non-portable ones need naming.
+
+         Excluded because they are not portable, or depend on something that
+         isn't (verified 2026-09-24 by compiling — a using-statement scan alone
+         is NOT enough, which is how the first attempt missed the last two):
+           AppLog.cs                 -> System.Diagnostics, Windows Event Log
+           CredentialStore.cs        -> System.Security.Cryptography, DPAPI
+           SessionService.cs         -> CommunityToolkit.Mvvm
+           AppServices.cs            -> transitively needs SessionService
+           ProfileLocationProvider.cs-> transitively needs SessionService
+         If you add a file needing WPF, DPAPI, the Event Log or the MVVM toolkit
+         — or one that merely references such a file — exclude it here too. And
+         prefer not to: portability is what lets this suite run on
+         ubuntu-latest, and it doubles as a standing check that the client
+         stayed portable. -->
     <Compile Include="..\InterlinedList\Models\*.cs" LinkBase="AppSource\Models" />
-    <Compile Include="..\InterlinedList\Services\InterlinedApiClient*.cs" LinkBase="AppSource\Services" />
-    <Compile Include="..\InterlinedList\Services\ApiConfig.cs" LinkBase="AppSource\Services" />
-    <Compile Include="..\InterlinedList\Services\InterlinedApiException.cs" LinkBase="AppSource\Services" />
+    <Compile Include="..\InterlinedList\Services\*.cs" LinkBase="AppSource\Services"
+             Exclude="..\InterlinedList\Services\AppLog.cs;..\InterlinedList\Services\CredentialStore.cs;..\InterlinedList\Services\SessionService.cs;..\InterlinedList\Services\AppServices.cs;..\InterlinedList\Services\ProfileLocationProvider.cs" />
   </ItemGroup>
 
   <!-- The endpoint-inventory test reads the client sources as *text* to rediscover

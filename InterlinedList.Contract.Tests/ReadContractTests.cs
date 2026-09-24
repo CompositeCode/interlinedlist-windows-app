@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using InterlinedList.Models;
 using InterlinedList.Services;
 using Xunit;
 
@@ -79,6 +80,30 @@ public sealed class ReadContractTests
 /// </summary>
 internal static class ReadProbes
 {
+    /// <summary>
+    /// The app-settings namespace this suite reads and writes. Deliberately not
+    /// a real app's key: the store is per-user per-app, so a throwaway key
+    /// cannot disturb anything a companion app relies on.
+    /// </summary>
+    /// <summary>
+    /// A transit agency slug the endpoint accepts. The `agency` parameter is
+    /// REQUIRED and is absent from the OpenAPI spec entirely — recovered by
+    /// probing, and its vocabulary is city slugs rather than operator names
+    /// (`seattle` and `portland` were accepted; `sound-transit`, `nyc`, `bart`
+    /// and ~30 others were not). Hard-coded rather than taken from
+    /// TransitAgencies, which resolves a slug from coordinates and exposes no
+    /// named constant.
+    /// </summary>
+    internal const string SeattleAgencySlug = "seattle";
+
+    internal const string ContractAppKey = "contract-tests";
+
+    /// <summary>
+    /// Device id for the same namespace. Must satisfy the documented
+    /// <c>^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$</c> — note the 8-character minimum.
+    /// </summary>
+    internal const string ContractDeviceId = "contract-tests-device";
+
     internal static readonly IReadOnlyDictionary<string, Func<ContractEnvironment, Task<string>>> All =
         new Dictionary<string, Func<ContractEnvironment, Task<string>>>(StringComparer.Ordinal)
         {
@@ -132,6 +157,152 @@ internal static class ReadProbes
             {
                 var page = await e.Client.GetMyOrganizationsAsync();
                 return $"{page.Organizations.Count} organizations (pagination={(page.Pagination is null ? "absent, as the model allows" : "present")})";
+            },
+
+            // ── Added 2026-09-24 with the parity merge pass ─────────────────────
+            // The inventory test demanded these: classifying an endpoint 'read'
+            // in the manifest without a probe here is a failure, deliberately.
+
+            ["GET api/limits"] = async e =>
+            {
+                var limits = await e.Client.GetLimitsAsync(forceRefresh: true);
+                // The composer and every file picker size themselves off these.
+                Assert.NotNull(limits.Message);
+                Assert.True(limits.Message!.MaxContentLength > 0);
+                Assert.NotNull(limits.Media?.Image);
+                return $"image {limits.Media!.Image!.MaxBytes}B, message {limits.Message.MaxContentLength} chars";
+            },
+
+            ["GET api/ai/status"] = async e =>
+            {
+                var status = await e.Client.GetAiStatusAsync();
+                // `providers` drives whether AI is shown at all; `quota` gates it.
+                Assert.NotNull(status.Providers);
+                Assert.NotNull(status.Quota);
+                return $"subscriber={status.Subscriber}, providers=[{string.Join(",", status.Providers!)}], quota {status.Quota!.UsedToday}/{status.Quota.DailyLimit}";
+            },
+
+            ["GET api/user/engagement"] = async e =>
+            {
+                // Documented in CLAUDE.md as 401-walled for bearer clients until
+                // 2026-09-15. This probe is the standing guard against that
+                // regressing, since the feature quietly disappears if it does.
+                var eng = await e.Client.GetEngagementAsync();
+                return $"{eng.TotalDigs} digs, {eng.TotalPushes} pushes, {eng.Recent?.Count ?? 0} recent";
+            },
+
+            ["GET api/documents/tree"] = async e =>
+            {
+                var tree = await e.Client.GetDocumentTreeAsync();
+                return $"{tree.Folders?.Count ?? 0} folders, {tree.RootDocuments?.Count ?? 0} root documents";
+            },
+
+            ["GET api/dm"] = async e =>
+            {
+                var page = await e.Client.GetDmFolderAsync(DmFolder.Inbox, take: 5);
+                return $"inbox: {page.Items?.Count ?? 0} message(s)";
+            },
+
+            ["GET api/dm/conversations"] = async e =>
+            {
+                var page = await e.Client.GetDmConversationsAsync(take: 5);
+                return $"{page.Items?.Count ?? 0} conversation(s)";
+            },
+
+            ["GET api/linkedin/targets"] = async e =>
+            {
+                // Returns 200 with an empty array whether or not LinkedIn is
+                // linked, so an empty result is not a failure here.
+                var targets = await e.Client.GetLinkedInTargetsAsync();
+                return $"{targets.Count} LinkedIn target(s)";
+            },
+
+            ["GET api/auth/github/status"] = async e =>
+            {
+                var state = await e.Client.GetGitHubLinkStateAsync();
+                return $"github link state: {state}";
+            },
+
+            ["GET api/github/repos"] = async e =>
+            {
+                // Without ?org= this is empty for an account owning no repos —
+                // which is the test account. Asserting only that it answers.
+                var repos = await e.Client.GetGitHubReposAsync();
+                return $"{repos.Count} repo(s) without an org filter";
+            },
+
+            ["GET api/github/orgs"] = async e =>
+            {
+                var orgs = await e.Client.GetGitHubOrgsAsync();
+                return $"{orgs.Count} org(s)";
+            },
+
+            // ── Widgets ─────────────────────────────────────────────────────────
+            // These proxy third-party services, so an upstream outage must not
+            // fail the suite. Transit in particular answers HTTP 200 carrying
+            // {"error":"unavailable"} in the body, so status alone proves nothing.
+
+            ["GET api/widgets/news"] = async e =>
+            {
+                var news = await e.Client.GetNewsWidgetAsync();
+                return $"{news.Items?.Count ?? 0} headline(s)";
+            },
+
+            ["GET api/widgets/markets"] = async e =>
+            {
+                var markets = await e.Client.GetMarketsWidgetAsync();
+                return $"{markets.Quotes?.Count ?? 0} quote(s)";
+            },
+
+            ["GET api/widgets/transit"] = async e =>
+            {
+                var transit = await e.Client.GetTransitAsync(SeattleAgencySlug);
+                return transit.Error is { Length: > 0 }
+                    ? $"agency {transit.Agency}: upstream reports \"{transit.Error}\" (HTTP 200 — not a contract failure)"
+                    : $"agency {transit.Agency}: {transit.Stops?.Count ?? 0} stop(s)";
+            },
+
+            ["GET api/widgets/transit/stops"] = async e =>
+            {
+                var stops = await e.Client.GetTransitStopsAsync(SeattleAgencySlug);
+                return stops.Error is { Length: > 0 }
+                    ? $"upstream reports \"{stops.Error}\" (HTTP 200 — not a contract failure)"
+                    : $"{stops.Stops?.Count ?? 0} nearby stop(s)";
+            },
+
+            ["GET api/widgets/bike-share"] = async e =>
+            {
+                var bikes = await e.Client.GetBikeShareAsync();
+                // Two payload shapes keyed by `kind` (dockless vs docked); both
+                // are valid, so only the discriminator is asserted.
+                Assert.False(string.IsNullOrWhiteSpace(bikes.Kind));
+                return $"kind={bikes.Kind}";
+            },
+
+            // ── Application settings ────────────────────────────────────────────
+            // Read against a throwaway appKey, so these never touch a real app's
+            // synced settings. 404 means "nothing stored yet" and is expected.
+
+            ["GET api/user/app-settings/{appKey}"] = async e =>
+            {
+                var doc = await e.Client.GetAccountSettingsAsync(ContractAppKey);
+                return doc is null
+                    ? "no account document for the throwaway appKey (404, as expected)"
+                    : $"version {doc.Version}, schemaVersion {doc.SchemaVersion}";
+            },
+
+            ["GET api/user/app-settings/{appKey}/devices"] = async e =>
+            {
+                var devices = await e.Client.GetAppDevicesAsync(ContractAppKey);
+                return $"{devices.Count} registered device(s) for the throwaway appKey";
+            },
+
+            ["GET api/user/app-settings/{appKey}/bootstrap"] = async e =>
+            {
+                // 404 {"source":"none"} is the documented "nothing to seed"
+                // answer and must be treated as normal, not an error.
+                var boot = await e.Client.GetAppSettingsBootstrapAsync(ContractAppKey, ContractDeviceId);
+                return $"bootstrap source: {boot.Source ?? "none"}";
             },
 
             // ── Messages / feed ─────────────────────────────────────────────────
