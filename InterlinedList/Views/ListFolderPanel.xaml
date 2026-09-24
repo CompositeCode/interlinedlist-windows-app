@@ -1,0 +1,167 @@
+<UserControl x:Class="InterlinedList.Views.ListFolderPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:InterlinedList.ViewModels"
+             xmlns:local="clr-namespace:InterlinedList.Views">
+
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+        <local:NullOrEmptyToVisibilityConverter x:Key="NullOrEmptyToVis"/>
+
+        <!-- Recursive template: the API returns a flat array and expresses
+             nesting only via parentId, so the tree is built in the VM. -->
+        <HierarchicalDataTemplate x:Key="FolderNodeTemplate"
+                                  DataType="{x:Type vm:ListFolderNodeViewModel}"
+                                  ItemsSource="{Binding Children}">
+            <Grid Margin="0,1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Resting: the name -->
+                <TextBlock Grid.Column="0"
+                           Text="{Binding Name}"
+                           FontSize="12"
+                           Foreground="{DynamicResource TextBodyBrush}"
+                           VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Visibility" Value="Visible"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsRenaming}" Value="True">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+
+                <!-- Renaming: inline editor, committed with Enter -->
+                <TextBox Grid.Column="0"
+                         Text="{Binding RenameText, UpdateSourceTrigger=PropertyChanged}"
+                         Background="{DynamicResource SurfaceBrush}"
+                         Foreground="{DynamicResource TextBodyBrush}"
+                         BorderBrush="{DynamicResource BorderStrongBrush}"
+                         BorderThickness="1"
+                         Padding="4,2"
+                         FontSize="12"
+                         Visibility="{Binding IsRenaming, Converter={StaticResource BoolToVis}}">
+                    <TextBox.InputBindings>
+                        <KeyBinding Key="Enter" Command="{Binding CommitRenameCommand}"/>
+                        <KeyBinding Key="Escape" Command="{Binding CancelRenameCommand}"/>
+                    </TextBox.InputBindings>
+                </TextBox>
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Content="Rename"
+                            Command="{Binding BeginRenameCommand}"
+                            Background="Transparent" BorderThickness="0" Cursor="Hand"
+                            Foreground="{DynamicResource TextMutedBrush}"
+                            FontSize="10" Padding="4,0"/>
+                    <Button Content="To root"
+                            Command="{Binding MoveToRootCommand}"
+                            Background="Transparent" BorderThickness="0" Cursor="Hand"
+                            Foreground="{DynamicResource TextMutedBrush}"
+                            FontSize="10" Padding="4,0"
+                            ToolTip="Move this folder to the top level"/>
+                    <!-- Delete cascades to subfolders, so the label changes
+                         once armed to say so. -->
+                    <Button Content="{Binding DeletePrompt}"
+                            Command="{Binding DeleteCommand}"
+                            Background="Transparent" BorderThickness="0" Cursor="Hand"
+                            Foreground="#FFE81123"
+                            FontSize="10" Padding="4,0"/>
+                </StackPanel>
+            </Grid>
+        </HierarchicalDataTemplate>
+    </UserControl.Resources>
+
+    <Border Background="{DynamicResource SurfaceBrush}"
+            BorderBrush="{DynamicResource BorderBrush}"
+            BorderThickness="1"
+            CornerRadius="4"
+            Padding="12">
+        <StackPanel>
+            <TextBlock Text="LIST FOLDERS"
+                       FontSize="10" FontWeight="SemiBold"
+                       Foreground="{DynamicResource TextMutedBrush}"
+                       Margin="0,0,0,8"/>
+
+            <TreeView ItemsSource="{Binding Roots}"
+                      ItemTemplate="{StaticResource FolderNodeTemplate}"
+                      Background="Transparent"
+                      BorderThickness="0"
+                      MaxHeight="220"
+                      Margin="0,0,0,8"/>
+
+            <TextBlock Text="No folders yet."
+                       FontSize="11"
+                       Foreground="{DynamicResource TextMutedBrush}"
+                       Margin="0,0,0,8">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <Setter Property="Visibility" Value="Collapsed"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding Roots.Count}" Value="0">
+                                <Setter Property="Visibility" Value="Visible"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
+
+            <!-- The server permits cycles, so the data can genuinely contain
+                 one. Say so rather than silently hiding folders. -->
+            <TextBlock Text="Some folders form a loop and aren't shown. Move one of them to the top level to fix it."
+                       FontSize="11"
+                       Foreground="#FFE81123"
+                       TextWrapping="Wrap"
+                       Margin="0,0,0,8"
+                       Visibility="{Binding HasOrphanedFolders, Converter={StaticResource BoolToVis}}"/>
+
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBox Grid.Column="0"
+                         Text="{Binding NewFolderName, UpdateSourceTrigger=PropertyChanged}"
+                         Background="{DynamicResource SurfaceBrush}"
+                         Foreground="{DynamicResource TextBodyBrush}"
+                         BorderBrush="{DynamicResource BorderBrush}"
+                         BorderThickness="1"
+                         Padding="8,5"
+                         FontSize="12"
+                         VerticalContentAlignment="Center"
+                         Margin="0,0,8,0">
+                    <TextBox.InputBindings>
+                        <KeyBinding Key="Enter" Command="{Binding CreateFolderCommand}"/>
+                    </TextBox.InputBindings>
+                </TextBox>
+                <Button Grid.Column="1"
+                        Content="New folder"
+                        Command="{Binding CreateFolderCommand}"
+                        Background="{DynamicResource PrimaryBrush}"
+                        Foreground="{DynamicResource OnMastheadBrush}"
+                        BorderThickness="0"
+                        FontSize="11" Padding="10,5" Cursor="Hand"/>
+            </Grid>
+
+            <TextBlock Text="{Binding StatusMessage}"
+                       FontSize="11"
+                       Foreground="{DynamicResource TextMutedBrush}"
+                       TextWrapping="Wrap"
+                       Margin="0,6,0,0"
+                       Visibility="{Binding StatusMessage, Converter={StaticResource NullOrEmptyToVis}}"/>
+
+            <TextBlock Text="{Binding ErrorMessage}"
+                       FontSize="11"
+                       Foreground="#FFE81123"
+                       TextWrapping="Wrap"
+                       Margin="0,6,0,0"
+                       Visibility="{Binding ErrorMessage, Converter={StaticResource NullOrEmptyToVis}}"/>
+        </StackPanel>
+    </Border>
+</UserControl>

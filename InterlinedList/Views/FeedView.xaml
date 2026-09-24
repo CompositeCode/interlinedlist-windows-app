@@ -102,6 +102,107 @@
             </Setter>
         </Style>
 
+        <!-- Tag chip: clickable, filters the feed by that tag -->
+        <Style x:Key="TagChipStyle" TargetType="Button">
+            <Setter Property="Background" Value="{DynamicResource Surface3Brush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource LinkBrush}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="8,2"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Margin" Value="0,0,4,4"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bg"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="3"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="Background"
+                                        Value="{DynamicResource BorderStrongBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Link preview card: the whole card is the click target -->
+        <Style x:Key="LinkPreviewBtnStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bg"
+                                Background="{DynamicResource Surface2Brush}"
+                                BorderBrush="{DynamicResource BorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="4">
+                            <ContentPresenter/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="BorderBrush"
+                                        Value="{DynamicResource BorderStrongBrush}"/>
+                                <Setter TargetName="Bg" Property="Background"
+                                        Value="{DynamicResource Surface3Brush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!--
+            One unfurled link. Shared by the feed cards (inline linkMetadata) and
+            the composer's ad-hoc preview, so both look identical.
+        -->
+        <DataTemplate x:Key="LinkPreviewCardTemplate" DataType="{x:Type vm:LinkPreviewViewModel}">
+            <Button Style="{StaticResource LinkPreviewBtnStyle}"
+                    Command="{Binding OpenCommand}"
+                    ToolTip="{Binding Url}"
+                    Margin="0,0,0,8">
+                <DockPanel LastChildFill="True">
+                    <!-- Collapses if the thumbnail fails to load: text-only card, not a gap -->
+                    <Border DockPanel.Dock="Left"
+                            Width="96" Height="96"
+                            ClipToBounds="True"
+                            CornerRadius="4,0,0,4"
+                            Background="{DynamicResource Surface3Brush}"
+                            Visibility="{Binding HasThumbnail, Converter={StaticResource BoolToVisibility}}">
+                        <Image Source="{Binding Thumbnail}" Stretch="UniformToFill"/>
+                    </Border>
+                    <StackPanel Margin="10,8" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding Title}"
+                                   FontSize="12" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextBrush}"
+                                   TextWrapping="Wrap"
+                                   MaxHeight="36" TextTrimming="CharacterEllipsis"/>
+                        <TextBlock Text="{Binding Description}"
+                                   FontSize="11"
+                                   Foreground="{DynamicResource TextMutedBrush}"
+                                   TextWrapping="Wrap"
+                                   MaxHeight="32" TextTrimming="CharacterEllipsis"
+                                   Margin="0,4,0,0"
+                                   Visibility="{Binding HasDescription, Converter={StaticResource BoolToVisibility}}"/>
+                        <TextBlock Text="{Binding Host}"
+                                   FontFamily="JetBrains Mono, Consolas"
+                                   FontSize="10"
+                                   Foreground="{DynamicResource TextMutedBrush}"
+                                   Margin="0,6,0,0"/>
+                    </StackPanel>
+                </DockPanel>
+            </Button>
+        </DataTemplate>
+
         <!-- Clickable author name → opens their profile -->
         <Style x:Key="AuthorLinkBtnStyle" TargetType="Button">
             <Setter Property="Background" Value="Transparent"/>
@@ -132,6 +233,7 @@
             <RowDefinition Height="Auto"/>  <!-- Header -->
             <RowDefinition Height="Auto"/>  <!-- Compose -->
             <RowDefinition Height="Auto"/>  <!-- Error banner -->
+            <RowDefinition Height="Auto"/>  <!-- Tag filter + trending -->
             <RowDefinition Height="*"/>     <!-- Post list -->
         </Grid.RowDefinitions>
 
@@ -199,6 +301,90 @@
                               Foreground="{DynamicResource TextMutedBrush}"
                               FontSize="12"
                               VerticalAlignment="Center"/>
+                </StackPanel>
+
+                <!--
+                    Compose-time unfurl of the draft's first URL, via
+                    GET /api/link-metadata. Nothing renders when the user has
+                    previews off, when there's no URL, or when the unfurl failed.
+                -->
+                <ContentControl Content="{Binding ComposePreview}"
+                                ContentTemplate="{StaticResource LinkPreviewCardTemplate}"
+                                Margin="0,8,0,0">
+                    <ContentControl.Style>
+                        <Style TargetType="ContentControl">
+                            <Setter Property="Visibility" Value="Visible"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding ComposePreview}" Value="{x:Null}">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </ContentControl.Style>
+                </ContentControl>
+
+                <!-- Tags for the next post -->
+                <StackPanel Margin="0,8,0,0">
+                    <!-- Already-added chips -->
+                    <ItemsControl ItemsSource="{Binding ComposeTags}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Background="{DynamicResource Surface3Brush}"
+                                        CornerRadius="3" Padding="8,2" Margin="0,0,4,4">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding StringFormat=#{0}}"
+                                                   FontSize="11"
+                                                   Foreground="{DynamicResource TextBodyBrush}"
+                                                   VerticalAlignment="Center"/>
+                                        <Button Content="✕"
+                                                Command="{Binding DataContext.RemoveTagCommand,
+                                                          RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                CommandParameter="{Binding}"
+                                                Style="{StaticResource CardActionBtnStyle}"
+                                                Padding="4,0" Margin="4,0,0,0"/>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <DockPanel LastChildFill="True">
+                        <Button DockPanel.Dock="Right"
+                                Content="Add tag"
+                                Command="{Binding AddTagCommand}"
+                                Style="{StaticResource DigBtnStyle}"
+                                Margin="6,0,0,0"/>
+                        <TextBox Text="{Binding TagInput, UpdateSourceTrigger=PropertyChanged}"
+                                 Padding="8,4" FontSize="12"
+                                 Background="{DynamicResource SurfaceBrush}"
+                                 Foreground="{DynamicResource TextBodyBrush}"
+                                 BorderBrush="{DynamicResource BorderBrush}"
+                                 BorderThickness="1"
+                                 ToolTip="Tags can contain spaces. Separate several with commas.">
+                            <TextBox.InputBindings>
+                                <KeyBinding Key="Return" Command="{Binding AddTagCommand}"/>
+                            </TextBox.InputBindings>
+                        </TextBox>
+                    </DockPanel>
+
+                    <!-- Prefix autocomplete (GET /api/tags/autocomplete) -->
+                    <ItemsControl ItemsSource="{Binding TagSuggestions}" Margin="0,6,0,0">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Button Content="{Binding Label}"
+                                        Command="{Binding DataContext.UseTagSuggestionCommand,
+                                                  RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                        CommandParameter="{Binding Tag}"
+                                        Style="{StaticResource TagChipStyle}"/>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
                 </StackPanel>
 
                 <!-- Attached images (uploaded, pending post) -->
@@ -303,8 +489,71 @@
                        TextWrapping="Wrap"/>
         </Border>
 
+        <!--
+            Tag filter + trending. Lives inside FeedView rather than the shell's
+            right rail: MainWindow.xaml is in open PR #149, and the feed is the
+            only place tags mean anything anyway.
+        -->
+        <Border Grid.Row="3"
+                Background="{DynamicResource SurfaceBrush}"
+                BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="0,0,0,1"
+                Padding="20,8">
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Setter Property="Visibility" Value="Visible"/>
+                    <Style.Triggers>
+                        <MultiDataTrigger>
+                            <MultiDataTrigger.Conditions>
+                                <Condition Binding="{Binding HasActiveTag}" Value="False"/>
+                                <Condition Binding="{Binding HasTrendingTags}" Value="False"/>
+                            </MultiDataTrigger.Conditions>
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                        </MultiDataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+            <StackPanel>
+                <!-- Which tag the feed is filtered to -->
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,6"
+                            Visibility="{Binding HasActiveTag, Converter={StaticResource BoolToVisibility}}">
+                    <TextBlock Text="{Binding ActiveTagLabel}"
+                               FontSize="12" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextBrush}"
+                               VerticalAlignment="Center"/>
+                    <Button Content="✕ Clear"
+                            Command="{Binding ClearTagFilterCommand}"
+                            Style="{StaticResource CardActionBtnStyle}"
+                            Margin="8,0,0,0"/>
+                </StackPanel>
+
+                <!-- Trending (GET /api/tags/trending) -->
+                <StackPanel Visibility="{Binding HasTrendingTags, Converter={StaticResource BoolToVisibility}}">
+                    <TextBlock Text="Trending"
+                               FontSize="10" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextMutedBrush}"
+                               Margin="0,0,0,4"/>
+                    <ItemsControl ItemsSource="{Binding TrendingTags}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Button Content="{Binding Label}"
+                                        Command="{Binding DataContext.FilterByTagCommand,
+                                                  RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                        CommandParameter="{Binding Tag}"
+                                        Style="{StaticResource TagChipStyle}"
+                                        ToolTip="{Binding CountLabel}"/>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
         <!-- Post list -->
-        <ScrollViewer Grid.Row="3"
+        <ScrollViewer Grid.Row="4"
                       VerticalScrollBarVisibility="Auto"
                       HorizontalScrollBarVisibility="Disabled"
                       Padding="16,12">
@@ -361,6 +610,13 @@
                                     <!-- Card content -->
                                     <StackPanel Grid.Column="1" Margin="12,10">
 
+                                        <!-- "↻ Pushed" / "❝ Quoted" badge -->
+                                        <TextBlock Text="{Binding RepostLabel}"
+                                                   FontSize="10" FontWeight="SemiBold"
+                                                   Foreground="{StaticResource TealAccentBrush}"
+                                                   Margin="0,0,0,4"
+                                                   Visibility="{Binding IsPushOrQuote, Converter={StaticResource BoolToVisibility}}"/>
+
                                         <!-- Header row -->
                                         <DockPanel Margin="0,0,0,6">
                                             <Border DockPanel.Dock="Left"
@@ -391,13 +647,71 @@
                                                        HorizontalAlignment="Right"/>
                                         </DockPanel>
 
-                                        <!-- Body -->
-                                        <TextBlock Text="{Binding Content}"
+                                        <!-- Body. MentionText renders @mentions as
+                                             clickable links (#94); the Visibility
+                                             binding below collapses this for a bare
+                                             Push, which carries no commentary (#31).
+                                             Both belong on this one element. -->
+                                        <TextBlock local:MentionText.Text="{Binding Content}"
                                                    FontSize="13"
                                                    Foreground="{DynamicResource TextBodyBrush}"
                                                    TextWrapping="Wrap"
                                                    LineHeight="20"
-                                                   Margin="0,0,0,8"/>
+                                                   Margin="0,0,0,8"
+                                                   Visibility="{Binding HasContent, Converter={StaticResource BoolToVisibility}}"/>
+
+                                        <!-- Embedded original, from the nested pushedMessage -->
+                                        <Border Margin="0,0,0,8"
+                                                Background="{DynamicResource Surface2Brush}"
+                                                BorderBrush="{DynamicResource BorderBrush}"
+                                                BorderThickness="1" CornerRadius="3" Padding="10,8"
+                                                Visibility="{Binding HasQuotedOriginal, Converter={StaticResource BoolToVisibility}}">
+                                            <StackPanel>
+                                                <DockPanel Margin="0,0,0,4">
+                                                    <Border DockPanel.Dock="Left"
+                                                            Width="18" Height="18" CornerRadius="999"
+                                                            ClipToBounds="True"
+                                                            Background="{DynamicResource Surface3Brush}"
+                                                            Margin="0,0,6,0">
+                                                        <Image Source="{Binding QuotedAvatarUrl}" Stretch="UniformToFill"/>
+                                                    </Border>
+                                                    <Button DockPanel.Dock="Left"
+                                                            Content="{Binding QuotedAuthorDisplayName}"
+                                                            Command="{Binding OpenQuotedAuthorCommand}"
+                                                            Style="{StaticResource AuthorLinkBtnStyle}"
+                                                            FontSize="11"
+                                                            VerticalAlignment="Center"
+                                                            Margin="0,0,6,0"/>
+                                                    <TextBlock DockPanel.Dock="Left"
+                                                               Text="{Binding QuotedAuthorHandle}"
+                                                               FontSize="10"
+                                                               Foreground="{DynamicResource TextMutedBrush}"
+                                                               VerticalAlignment="Center"/>
+                                                    <TextBlock DockPanel.Dock="Right"
+                                                               Text="{Binding QuotedTimeFormatted}"
+                                                               FontFamily="JetBrains Mono, Consolas"
+                                                               FontSize="10"
+                                                               Foreground="{DynamicResource TextMutedBrush}"
+                                                               HorizontalAlignment="Right"/>
+                                                </DockPanel>
+                                                <TextBlock Text="{Binding QuotedContent}"
+                                                           FontSize="12"
+                                                           Foreground="{DynamicResource TextBodyBrush}"
+                                                           TextWrapping="Wrap" LineHeight="18"
+                                                           MaxHeight="120" TextTrimming="CharacterEllipsis"/>
+                                                <ItemsControl ItemsSource="{Binding QuotedImageUrls}" Margin="0,6,0,0"
+                                                              Visibility="{Binding QuotedHasImages, Converter={StaticResource BoolToVisibility}}">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <Border Margin="0,0,0,4" CornerRadius="3"
+                                                                    ClipToBounds="True" HorizontalAlignment="Left">
+                                                                <Image Source="{Binding}" Stretch="Uniform" MaxHeight="180"/>
+                                                            </Border>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </StackPanel>
+                                        </Border>
 
                                         <!-- Attached images -->
                                         <ItemsControl ItemsSource="{Binding ImageUrls}" Margin="0,0,0,8"
@@ -427,8 +741,35 @@
                                             </ItemsControl.ItemTemplate>
                                         </ItemsControl>
 
-                                        <!-- Footer: Dig + actions -->
-                                        <StackPanel Orientation="Horizontal">
+                                        <!--
+                                            Link previews, from the inline linkMetadata.
+                                            Empty (so collapsed) when the viewer has
+                                            showPreviews off, or when every unfurl failed.
+                                        -->
+                                        <ItemsControl ItemsSource="{Binding LinkPreviews}"
+                                                      ItemTemplate="{StaticResource LinkPreviewCardTemplate}"
+                                                      Visibility="{Binding HasLinkPreviews, Converter={StaticResource BoolToVisibility}}"/>
+
+                                        <!-- Tag chips → filter the feed by that tag -->
+                                        <ItemsControl ItemsSource="{Binding Tags}" Margin="0,0,0,6"
+                                                      Visibility="{Binding HasTags, Converter={StaticResource BoolToVisibility}}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Button Command="{Binding DataContext.FilterByTagCommand,
+                                                                      RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                            CommandParameter="{Binding}"
+                                                            Style="{StaticResource TagChipStyle}">
+                                                        <TextBlock Text="{Binding StringFormat=#{0}}"/>
+                                                    </Button>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+
+                                        <!-- Footer: Dig + actions (wraps — the row is long on a narrow window) -->
+                                        <WrapPanel>
                                             <Button Content="Dig"
                                                     Command="{Binding DigCommand}">
                                                 <Button.Style>
@@ -448,6 +789,20 @@
                                                        Foreground="{DynamicResource TextMutedBrush}"
                                                        VerticalAlignment="Center"
                                                        Margin="8,0,12,0"/>
+                                            <!-- pushCount, alongside digCount -->
+                                            <TextBlock Text="{Binding PushCount, StringFormat=↻ {0}}"
+                                                       FontFamily="JetBrains Mono, Consolas"
+                                                       FontSize="10"
+                                                       Foreground="{DynamicResource TextMutedBrush}"
+                                                       VerticalAlignment="Center"
+                                                       Margin="0,0,12,0"
+                                                       ToolTip="Pushes"/>
+                                            <Button Content="Push" Command="{Binding PushCommand}"
+                                                    Style="{StaticResource CardActionBtnStyle}"
+                                                    ToolTip="Re-share as-is. Always public."/>
+                                            <Button Content="Quote" Command="{Binding StartQuoteCommand}"
+                                                    Style="{StaticResource CardActionBtnStyle}"
+                                                    ToolTip="Re-share with your own note. Always public."/>
                                             <Button Content="Reply" Command="{Binding StartReplyCommand}"
                                                     Style="{StaticResource CardActionBtnStyle}"/>
                                             <Button Content="Replies" Command="{Binding ToggleRepliesCommand}"
@@ -461,6 +816,40 @@
                                             <Button Content="Report" Command="{Binding ReportCommand}"
                                                     Style="{StaticResource CardActionBtnStyle}"
                                                     Visibility="{Binding CanReport, Converter={StaticResource BoolToVisibility}}"/>
+                                        </WrapPanel>
+
+                                        <!-- Per-card status (a failed Push/Quote, or "Reported. Thanks…") -->
+                                        <TextBlock Text="{Binding ErrorMessage}"
+                                                   FontSize="11"
+                                                   Foreground="{StaticResource AmberBrush}"
+                                                   TextWrapping="Wrap"
+                                                   Margin="0,6,0,0"
+                                                   Visibility="{Binding ErrorMessage, Converter={StaticResource NullOrEmptyToVisibility}}"/>
+
+                                        <!-- Quote composer: the banner IS the "this will be public" confirmation -->
+                                        <StackPanel Margin="0,8,0,0"
+                                                    Visibility="{Binding IsComposingQuote, Converter={StaticResource BoolToVisibility}}">
+                                            <Border Background="#1AF0A830"
+                                                    BorderBrush="{StaticResource AmberBrush}"
+                                                    BorderThickness="1" CornerRadius="3"
+                                                    Padding="8,6" Margin="0,0,0,6">
+                                                <TextBlock Text="Quotes are always public — everyone will be able to see this, whatever your default visibility is."
+                                                           FontSize="11"
+                                                           Foreground="{DynamicResource TextBodyBrush}"
+                                                           TextWrapping="Wrap"/>
+                                            </Border>
+                                            <TextBox Text="{Binding QuoteText, UpdateSourceTrigger=PropertyChanged}"
+                                                     AcceptsReturn="True" TextWrapping="Wrap"
+                                                     MinHeight="44" Padding="8,6" FontSize="13"
+                                                     Background="{DynamicResource Surface2Brush}"
+                                                     Foreground="{DynamicResource TextBodyBrush}"
+                                                     BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"/>
+                                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,6,0,0">
+                                                <Button Content="Cancel" Command="{Binding CancelQuoteCommand}"
+                                                        Style="{StaticResource CardActionBtnStyle}" Margin="0,0,6,0"/>
+                                                <Button Content="Quote publicly" Command="{Binding PostQuoteCommand}"
+                                                        Style="{StaticResource PrimaryBtnStyle}"/>
+                                            </StackPanel>
                                         </StackPanel>
 
                                         <!-- Inline edit -->
@@ -518,7 +907,7 @@
                                                                            Foreground="{DynamicResource TextMutedBrush}"
                                                                            HorizontalAlignment="Right"/>
                                                             </DockPanel>
-                                                            <TextBlock Text="{Binding Content}" FontSize="12"
+                                                            <TextBlock local:MentionText.Text="{Binding Content}" FontSize="12"
                                                                        Foreground="{DynamicResource TextBodyBrush}"
                                                                        TextWrapping="Wrap" LineHeight="18"/>
                                                         </StackPanel>
@@ -558,7 +947,7 @@
                                   <StackPanel>
                                       <TextBlock Text="⏱ Scheduled" FontSize="10" FontWeight="SemiBold"
                                                  Foreground="{StaticResource AmberBrush}" Margin="0,0,0,4"/>
-                                      <TextBlock Text="{Binding Content}" FontSize="13"
+                                      <TextBlock local:MentionText.Text="{Binding Content}" FontSize="13"
                                                  Foreground="{DynamicResource TextBodyBrush}" TextWrapping="Wrap"/>
                                   </StackPanel>
                               </Border>

@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using InterlinedList.Models;
 using InterlinedList.Services;
 using Microsoft.Win32;
 
@@ -83,11 +84,276 @@ public partial class FeedViewModel : ObservableObject
 
     public string ScheduledToggleLabel => ShowScheduled ? "← Back to feed" : "Scheduled";
 
+    // ── Tags ────────────────────────────────────────────────────────────────────
+
+    /// <summary>Tags attached to the next post, sent as <c>tags: string[]</c>.</summary>
+    public ObservableCollection<string> ComposeTags { get; } = new();
+
+    /// <summary>Prefix-match suggestions for whatever is in <see cref="TagInput"/>.</summary>
+    public ObservableCollection<TrendingTag> TagSuggestions { get; } = new();
+
+    /// <summary>Most-used tags in the server's trailing window.</summary>
+    public ObservableCollection<TrendingTag> TrendingTags { get; } = new();
+
+    [ObservableProperty]
+    private string tagInput = "";
+
+    public bool HasTrendingTags => TrendingTags.Count > 0;
+
+    /// <summary>
+    /// The tag the feed is currently filtered to (<c>GET /api/messages?tag=</c>),
+    /// or null for the unfiltered feed.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasActiveTag))]
+    [NotifyPropertyChangedFor(nameof(ActiveTagLabel))]
+    private string? activeTag;
+
+    public bool HasActiveTag => !string.IsNullOrEmpty(ActiveTag);
+    public string ActiveTagLabel => $"Showing #{ActiveTag}";
+
+    // Debounces the autocomplete call so typing doesn't fire one request per
+    // keystroke. Cancelled and replaced on each change; never awaited on the
+    // dispatcher.
+    private CancellationTokenSource? _autocompleteCts;
+
+    // ── Link previews ───────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// The viewer's <c>showPreviews</c> preference from <c>GET /api/user</c>. When
+    /// off, no preview card renders anywhere in the feed — not on cards, not in the
+    /// composer. It is <c>false</c> on the test account, so the off path is the one
+    /// that actually got looked at.
+    /// </summary>
+    public bool ShowPreviews => _session.CurrentUser?.ShowPreviews ?? false;
+
+    /// <summary>
+    /// Ad-hoc unfurl of the first URL in the draft
+    /// (<c>GET /api/link-metadata?url=</c>), so the composer shows what the post
+    /// will look like. Null when there's no URL yet, the unfurl failed, or
+    /// previews are switched off.
+    /// </summary>
+    [ObservableProperty]
+    private LinkPreviewViewModel? composePreview;
+
+    // Same debounce discipline as the tag autocomplete.
+    private CancellationTokenSource? _composePreviewCts;
+    private string? _composePreviewUrl;
+
+    /// <summary>
+    /// First http(s) URL in a draft. Trailing punctuation is trimmed — people
+    /// write "see https://example.com/x." and the sentence period is not part of
+    /// the link.
+    /// </summary>
+    private static readonly System.Text.RegularExpressions.Regex UrlPattern =
+        new(@"https?://[^\s<>""]+", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
     public FeedViewModel(SessionService session)
     {
         _session = session;
         AttachedImageUrls.CollectionChanged += (_, _) => PostCommand.NotifyCanExecuteChanged();
         AttachedVideoUrls.CollectionChanged += (_, _) => PostCommand.NotifyCanExecuteChanged();
+        TrendingTags.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasTrendingTags));
+    }
+
+    /// <summary>
+    /// Wrap a wire message for the feed. Centralized so every card is hooked to
+    /// <see cref="MessageItemViewModel.Posted"/> — a Push or Quote publishes a new
+    /// post, and the write response isn't parsed, so the feed re-fetches.
+    /// </summary>
+    private MessageItemViewModel Wrap(Message message)
+    {
+        var item = new MessageItemViewModel(message, _session.Api, _session.CurrentUser?.Id, ShowPreviews);
+        item.Posted += OnItemPosted;
+        return item;
+    }
+
+    private void OnItemPosted(object? sender, EventArgs e) => RefreshCommand.Execute(null);
+
+    // ── Tag commands ────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Add whatever is typed to the compose tag list. Splits on commas only —
+    /// live tags contain spaces (<c>orbit culture</c>,
+    /// <c>life is short, o brave girl</c>), so whitespace can't be a delimiter.
+    /// Duplicates are ignored, case-insensitively.
+    /// </summary>
+    private bool CanAddTag() => !string.IsNullOrWhiteSpace(TagInput);
+
+    [RelayCommand(CanExecute = nameof(CanAddTag))]
+    private void AddTag()
+    {
+        foreach (var part in TagInput.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+            AddTagValue(part);
+
+        TagInput = "";
+        TagSuggestions.Clear();
+    }
+
+    /// <summary>Accept an autocomplete or trending suggestion into the composer.</summary>
+    [RelayCommand]
+    private void UseTagSuggestion(string? tag)
+    {
+        AddTagValue(tag);
+        TagInput = "";
+        TagSuggestions.Clear();
+    }
+
+    private void AddTagValue(string? tag)
+    {
+        var value = tag?.Trim();
+        if (string.IsNullOrEmpty(value)) return;
+        if (ComposeTags.Any(t => string.Equals(t, value, StringComparison.OrdinalIgnoreCase))) return;
+        ComposeTags.Add(value);
+    }
+
+    [RelayCommand]
+    private void RemoveTag(string tag) => ComposeTags.Remove(tag);
+
+    /// <summary>Filter the feed to one tag. Called from a chip on a card or from the trending panel.</summary>
+    [RelayCommand]
+    private async Task FilterByTagAsync(string? tag)
+    {
+        if (string.IsNullOrWhiteSpace(tag)) return;
+        ActiveTag = tag.Trim();
+        ShowScheduled = false;
+        await RefreshAsync();
+    }
+
+    [RelayCommand]
+    private async Task ClearTagFilterAsync()
+    {
+        if (ActiveTag is null) return;
+        ActiveTag = null;
+        await RefreshAsync();
+    }
+
+    [RelayCommand]
+    private async Task LoadTrendingTagsAsync()
+    {
+        try
+        {
+            var trending = await _session.Api.GetTrendingTagsAsync();
+            TrendingTags.Clear();
+            foreach (var t in trending)
+                TrendingTags.Add(t);
+        }
+        catch (InterlinedApiException)
+        {
+            // Decorative panel — a failure here shouldn't put an error banner
+            // over the feed the user actually came for.
+        }
+    }
+
+    partial void OnTagInputChanged(string value)
+    {
+        AddTagCommand.NotifyCanExecuteChanged();
+        _ = SuggestTagsAsync(value);
+    }
+
+    // ── Compose-time link preview ───────────────────────────────────────────────
+
+    private static string? FirstUrl(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return null;
+        var match = UrlPattern.Match(text);
+        if (!match.Success) return null;
+
+        var url = match.Value.TrimEnd('.', ',', ';', ':', '!', '?', ')', ']', '}', '"', '\'');
+        return url.Length > "https://".Length ? url : null;
+    }
+
+    /// <summary>
+    /// Debounced ad-hoc unfurl of the draft's first URL. Fire-and-forget, like the
+    /// tag autocomplete: it must not block the dispatcher, and a keystroke that
+    /// supersedes an in-flight request cancels it.
+    /// </summary>
+    private async Task UpdateComposePreviewAsync(string? text)
+    {
+        if (!ShowPreviews)
+        {
+            ComposePreview = null;
+            return;
+        }
+
+        var url = FirstUrl(text);
+        if (url is null)
+        {
+            _composePreviewCts?.Cancel();
+            _composePreviewUrl = null;
+            ComposePreview = null;
+            return;
+        }
+
+        // Still the same link — don't re-unfurl on every character of prose typed
+        // after it.
+        if (string.Equals(url, _composePreviewUrl, StringComparison.OrdinalIgnoreCase)) return;
+
+        _composePreviewCts?.Cancel();
+        _composePreviewCts?.Dispose();
+        var cts = new CancellationTokenSource();
+        _composePreviewCts = cts;
+        _composePreviewUrl = url;
+
+        try
+        {
+            await Task.Delay(600, cts.Token);
+            var preview = await _session.Api.GetLinkMetadataAsync(url, cts.Token);
+            if (cts.Token.IsCancellationRequested) return;
+
+            // A failed unfurl comes back as null, not as an exception — no card.
+            ComposePreview = preview is null ? null : new LinkPreviewViewModel(preview);
+        }
+        catch (OperationCanceledException)
+        {
+            // Superseded.
+        }
+        catch (InterlinedApiException)
+        {
+            ComposePreview = null;
+        }
+    }
+
+    /// <summary>
+    /// Debounced prefix autocomplete. Fire-and-forget on purpose: it must never
+    /// block the dispatcher, and a superseded keystroke's request is cancelled
+    /// rather than awaited.
+    /// </summary>
+    private async Task SuggestTagsAsync(string prefix)
+    {
+        _autocompleteCts?.Cancel();
+        _autocompleteCts?.Dispose();
+
+        if (string.IsNullOrWhiteSpace(prefix))
+        {
+            _autocompleteCts = null;
+            TagSuggestions.Clear();
+            return;
+        }
+
+        var cts = new CancellationTokenSource();
+        _autocompleteCts = cts;
+        try
+        {
+            await Task.Delay(250, cts.Token);
+            var matches = await _session.Api.AutocompleteTagsAsync(prefix, ct: cts.Token);
+            if (cts.Token.IsCancellationRequested) return;
+
+            TagSuggestions.Clear();
+            foreach (var m in matches)
+            {
+                if (ComposeTags.Any(t => string.Equals(t, m.Tag, StringComparison.OrdinalIgnoreCase))) continue;
+                TagSuggestions.Add(m);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Superseded by a later keystroke.
+        }
+        catch (InterlinedApiException)
+        {
+            TagSuggestions.Clear();
+        }
     }
 
     [RelayCommand]
@@ -189,7 +455,7 @@ public partial class FeedViewModel : ObservableObject
             var scheduled = await _session.Api.GetScheduledMessagesAsync();
             ScheduledMessages.Clear();
             foreach (var m in scheduled)
-                ScheduledMessages.Add(new MessageItemViewModel(m, _session.Api, _session.CurrentUser?.Id));
+                ScheduledMessages.Add(Wrap(m));
             ErrorMessage = null;
         }
         catch (InterlinedApiException ex)
@@ -221,11 +487,11 @@ public partial class FeedViewModel : ObservableObject
         try
         {
             _offset = 0;
-            var page = await _session.Api.GetMessagesAsync(limit: PageSize, offset: 0);
+            var page = await _session.Api.GetFeedPageAsync(limit: PageSize, offset: 0, tag: ActiveTag);
 
             Messages.Clear();
             foreach (var message in page.Messages)
-                Messages.Add(new MessageItemViewModel(message, _session.Api, _session.CurrentUser?.Id));
+                Messages.Add(Wrap(message));
 
             HasMore = page.Pagination.HasMore;
             _offset = page.Messages.Count;
@@ -249,10 +515,10 @@ public partial class FeedViewModel : ObservableObject
         IsLoadingMore = true;
         try
         {
-            var page = await _session.Api.GetMessagesAsync(limit: PageSize, offset: _offset);
+            var page = await _session.Api.GetFeedPageAsync(limit: PageSize, offset: _offset, tag: ActiveTag);
 
             foreach (var message in page.Messages)
-                Messages.Add(new MessageItemViewModel(message, _session.Api, _session.CurrentUser?.Id));
+                Messages.Add(Wrap(message));
 
             _offset += page.Messages.Count;
             HasMore = page.Pagination.HasMore;
@@ -277,16 +543,22 @@ public partial class FeedViewModel : ObservableObject
         IsPosting = true;
         try
         {
-            await _session.Api.PostMessageAsync(
-                ComposeText.Trim(),
-                _session.CurrentUser?.DefaultPubliclyVisible ?? true,
-                crossPostToBluesky: CrossPostToBluesky,
-                crossPostToTwitter: CrossPostToTwitter,
-                mastodonProviderIds: CrossPostToMastodon ? MastodonProvider : null,
-                scheduledAt: ResolveScheduledAt(),
-                imageUrls: AttachedImageUrls.Count > 0 ? AttachedImageUrls.ToList() : null,
-                videoUrls: AttachedVideoUrls.Count > 0 ? AttachedVideoUrls.ToList() : null);
+            await _session.Api.PostMessageAsync(new NewMessage
+            {
+                Content = ComposeText.Trim(),
+                PubliclyVisible = _session.CurrentUser?.DefaultPubliclyVisible ?? true,
+                CrossPostToBluesky = CrossPostToBluesky,
+                CrossPostToTwitter = CrossPostToTwitter,
+                MastodonProviderIds = CrossPostToMastodon ? MastodonProvider : null,
+                ScheduledAt = ResolveScheduledAt(),
+                ImageUrls = AttachedImageUrls.Count > 0 ? AttachedImageUrls.ToList() : null,
+                VideoUrls = AttachedVideoUrls.Count > 0 ? AttachedVideoUrls.ToList() : null,
+                Tags = ComposeTags.Count > 0 ? ComposeTags.ToList() : null,
+            });
             ComposeText = "";
+            ComposeTags.Clear();
+            TagInput = "";
+            TagSuggestions.Clear();
             CrossPostToBluesky = false;
             CrossPostToTwitter = false;
             CrossPostToMastodon = false;
@@ -328,5 +600,9 @@ public partial class FeedViewModel : ObservableObject
     partial void OnIsLoadingChanged(bool value) => LoadMoreCommand.NotifyCanExecuteChanged();
     partial void OnIsLoadingMoreChanged(bool value) => LoadMoreCommand.NotifyCanExecuteChanged();
     partial void OnIsPostingChanged(bool value) => PostCommand.NotifyCanExecuteChanged();
-    partial void OnComposeTextChanged(string value) => PostCommand.NotifyCanExecuteChanged();
+    partial void OnComposeTextChanged(string value)
+    {
+        PostCommand.NotifyCanExecuteChanged();
+        _ = UpdateComposePreviewAsync(value);
+    }
 }
