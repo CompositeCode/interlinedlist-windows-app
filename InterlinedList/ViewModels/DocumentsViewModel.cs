@@ -10,7 +10,11 @@ public partial class DocumentsViewModel : ObservableObject
 {
     private readonly SessionService _session;
 
-    public ObservableCollection<DocumentSummary> RootDocuments { get; } = new();
+    // Sidebar contents, both filled from the single GET /api/documents/tree call.
+    // These are the tree's lightweight nodes (no content) — selecting one fetches
+    // the full document for the editor. Folders carry ParentId; rendering that
+    // nesting is issue #79, so this list stays flat for now.
+    public ObservableCollection<DocumentFolderEntry> RootDocuments { get; } = new();
     public ObservableCollection<DocumentFolder> Folders { get; } = new();
     public ObservableCollection<DocumentTemplate> Templates { get; } = new();
 
@@ -76,16 +80,18 @@ public partial class DocumentsViewModel : ObservableObject
         IsLoading = true;
         try
         {
-            var documentsPage = await _session.Api.GetRootDocumentsAsync();
-            var foldersPage = await _session.Api.GetDocumentFoldersAsync();
+            // One request for the whole sidebar (folders + their documents + root
+            // documents), replacing the old GET /api/documents + GET
+            // /api/documents/folders pair.
+            var tree = await _session.Api.GetDocumentTreeAsync();
             var templatesResponse = await _session.Api.GetDocumentTemplatesAsync();
 
             RootDocuments.Clear();
-            foreach (var doc in documentsPage.Documents)
+            foreach (var doc in tree.RootDocuments)
                 RootDocuments.Add(doc);
 
             Folders.Clear();
-            foreach (var folder in foldersPage.Folders)
+            foreach (var folder in tree.Folders)
                 Folders.Add(folder);
 
             Templates.Clear();
@@ -123,16 +129,30 @@ public partial class DocumentsViewModel : ObservableObject
         }
     }
 
+    // The sidebar rows are tree nodes and carry no content, so opening one in the
+    // editor fetches the full document. That also means the editor always starts
+    // from the server's current body rather than a list snapshot.
     [RelayCommand]
-    private async Task SelectDocumentAsync(DocumentSummary doc)
+    private async Task SelectDocumentAsync(DocumentFolderEntry entry)
     {
-        SelectedDocument = doc;
-        EditTitle = doc.Title;
-        EditContent = doc.Content;
+        try
+        {
+            var doc = await _session.Api.GetDocumentAsync(entry.Id);
+            SelectedDocument = doc;
+            EditTitle = doc.Title;
+            EditContent = doc.Content;
+            ErrorMessage = null;
+        }
+        catch (InterlinedApiException ex)
+        {
+            ErrorMessage = ex.Message;
+            return;
+        }
+
         CollaboratorSearchQuery = "";
         CollaboratorSearchResults.Clear();
-        await ReloadShareLinksAsync(doc.Id);
-        await ReloadCollaboratorsAsync(doc.Id);
+        await ReloadShareLinksAsync(entry.Id);
+        await ReloadCollaboratorsAsync(entry.Id);
     }
 
     // Refresh ShareLinks from the server for the given document (read-after-write).
@@ -295,12 +315,14 @@ public partial class DocumentsViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private async Task DeleteDocumentAsync(DocumentSummary doc)
+    private async Task DeleteDocumentAsync(DocumentFolderEntry entry)
     {
         try
         {
-            await _session.Api.DeleteDocumentAsync(doc.Id);
-            if (SelectedDocument == doc)
+            await _session.Api.DeleteDocumentAsync(entry.Id);
+            // Compare by id: the sidebar node and the loaded editor document are
+            // now different types, so reference equality no longer applies.
+            if (SelectedDocument?.Id == entry.Id)
             {
                 SelectedDocument = null;
                 EditTitle = "";
