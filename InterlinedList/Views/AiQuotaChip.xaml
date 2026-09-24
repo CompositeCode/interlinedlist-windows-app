@@ -1,0 +1,52 @@
+<UserControl x:Class="InterlinedList.Views.AiQuotaChip"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:InterlinedList.Views"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d">
+
+    <!--
+        "45 of 50 left today". Collapses itself entirely when the AI gate is
+        closed, so it is safe to drop next to any AI action without the host
+        needing its own visibility rule. DataContext is AiAvailabilityService.Shared,
+        set in the constructor.
+    -->
+    <Border CornerRadius="3"
+            Padding="7,2"
+            BorderThickness="1"
+            VerticalAlignment="Center">
+        <Border.Style>
+            <Style TargetType="Border">
+                <Setter Property="Visibility" Value="Collapsed"/>
+                <Setter Property="Background" Value="{DynamicResource Surface3Brush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding IsAiAvailable}" Value="True">
+                        <Setter Property="Visibility" Value="Visible"/>
+                    </DataTrigger>
+                    <!-- Out of quota: amber, the brand's live/pending accent. -->
+                    <DataTrigger Binding="{Binding IsQuotaExhausted}" Value="True">
+                        <Setter Property="BorderBrush" Value="{StaticResource AmberBrush}"/>
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+        </Border.Style>
+
+        <TextBlock Text="{Binding QuotaLabel}"
+                   FontSize="10"
+                   FontFamily="JetBrains Mono, Consolas"
+                   VerticalAlignment="Center">
+            <TextBlock.Style>
+                <Style TargetType="TextBlock">
+                    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}"/>
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsQuotaExhausted}" Value="True">
+                            <Setter Property="Foreground" Value="{StaticResource AmberBrush}"/>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </TextBlock.Style>
+        </TextBlock>
+    </Border>
+</UserControl>
