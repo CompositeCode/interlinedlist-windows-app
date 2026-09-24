@@ -1,0 +1,105 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Live API contract tests (issue #126).
+
+    WHY THIS PROJECT IS net10.0 AND NOT net10.0-windows
+    ===================================================
+    InterlinedList.csproj is `net10.0-windows` + `UseWPF=true`, so a test project
+    that ProjectReference'd it could only ever run on a Windows runner, and would
+    drag the whole WPF surface into a suite that only needs HTTP and JSON.
+
+    Instead this project *compile-includes the portable subset of the app's own
+    source* — the wire models and the real API client partials. That subset was
+    audited to have zero Windows-only dependencies: every `using` across
+    InterlinedList/Models and InterlinedList/Services/InterlinedApiClient*.cs is
+    System.IO / System.Net.Http{,.Headers,.Json} / System.Text{,.Json}. No WPF, no
+    DPAPI (CredentialStore), no EventLog (AppLog), no CommunityToolkit.Mvvm.
+
+    The payoff is that these tests drive the SAME InterlinedApiClient the shipping
+    app drives, deserializing into the SAME model types — not a reimplementation
+    that can silently agree with itself. In particular the models use C#
+    `required` properties, and System.Text.Json throws JsonException when a
+    required member is absent from the payload. That makes "the response still
+    contains the fields the app's models require" an assertion we get for free
+    and cannot forget to update.
+
+    Trade-off, stated plainly: the globs below track whatever is in
+    InterlinedList/, so a future partial that reaches for a Windows-only API will
+    break this project's compile. That is the intended alarm, not a bug — the
+    client is supposed to stay portable (the sync utility depends on the same
+    property). If it ever must not be, switch these globs to an explicit file
+    list.
+
+    This is the same technique already used in the repo to verify models on
+    macOS, and the same "separate minimal client, shared token" split that
+    InterlinedList.Sync.Core uses rather than referencing the WPF app.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <RootNamespace>InterlinedList.Contract.Tests</RootNamespace>
+    <!-- The app's source is authored for a WPF app; don't fail this build on
+         analyzer noise we are not here to fix and must not edit. -->
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.8.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" />
+    <!-- xunit 2.x has no Assert.Skip (that is v3). SkippableFact is how a v2
+         suite skips at runtime, which is what env-gating requires: no
+         credentials => skipped, not failed. Matches InterlinedList.Sync.Core.Tests'
+         xunit 2.9.3 pin. -->
+    <PackageReference Include="Xunit.SkippableFact" Version="1.5.85" />
+  </ItemGroup>
+
+  <!-- The app's portable source, compiled straight into the test assembly.
+       Link metadata keeps the IDE tree tidy. -->
+  <ItemGroup>
+    <!-- The app is net10.0-windows (WPF) and cannot be referenced from a test
+         project that runs on Linux CI, so its PORTABLE source is compile-included
+         instead. That keeps the tests driving the real client and real model
+         types — the models' `required` properties make System.Text.Json itself
+         perform the field-presence assertion.
+
+         Services/ is globbed with exclusions rather than enumerated file by
+         file. Enumerating broke twice as the app grew (CursorPager.cs,
+         ListSchemaException.cs, AiApiException.cs were each missed), because a
+         new portable file is invisible here until it fails to compile. A glob
+         inverts that: new portable files are picked up automatically, and only
+         the three genuinely non-portable ones need naming.
+
+         Excluded because they are not portable, or depend on something that
+         isn't (verified 2026-09-24 by compiling — a using-statement scan alone
+         is NOT enough, which is how the first attempt missed the last two):
+           AppLog.cs                 -> System.Diagnostics, Windows Event Log
+           CredentialStore.cs        -> System.Security.Cryptography, DPAPI
+           SessionService.cs         -> CommunityToolkit.Mvvm
+           AppServices.cs            -> transitively needs SessionService
+           ProfileLocationProvider.cs-> transitively needs SessionService
+         If you add a file needing WPF, DPAPI, the Event Log or the MVVM toolkit
+         — or one that merely references such a file — exclude it here too. And
+         prefer not to: portability is what lets this suite run on
+         ubuntu-latest, and it doubles as a standing check that the client
+         stayed portable. -->
+    <Compile Include="..\InterlinedList\Models\*.cs" LinkBase="AppSource\Models" />
+    <Compile Include="..\InterlinedList\Services\*.cs" LinkBase="AppSource\Services"
+             Exclude="..\InterlinedList\Services\AppLog.cs;..\InterlinedList\Services\CredentialStore.cs;..\InterlinedList\Services\SessionService.cs;..\InterlinedList\Services\AppServices.cs;..\InterlinedList\Services\ProfileLocationProvider.cs" />
+  </ItemGroup>
+
+  <!-- The endpoint-inventory test reads the client sources as *text* to rediscover
+       path templates, so it needs them next to the test binary at runtime. -->
+  <ItemGroup>
+    <None Include="..\InterlinedList\Services\InterlinedApiClient*.cs"
+          Link="ClientSources\%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="endpoints.manifest.tsv" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>
