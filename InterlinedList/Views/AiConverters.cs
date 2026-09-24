@@ -20,15 +20,17 @@ public sealed class NotNullToVisibilityConverter : IValueConverter
         throw new NotSupportedException();
 }
 
-/// <summary>Collapsed when the bound bool is true (the inverse of BooleanToVisibilityConverter).</summary>
-public sealed class InverseBoolToVisibilityConverter : IValueConverter
-{
-    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
-        value is true ? Visibility.Collapsed : Visibility.Visible;
-
-    public object ConvertBack(object value, Type targetType, object? parameter, CultureInfo culture) =>
-        throw new NotSupportedException();
-}
+// InverseBoolToVisibilityConverter is NOT declared here. It already exists in
+// ListsViewConverters.cs, in this same InterlinedList.Views namespace, with a
+// byte-identical implementation — declaring it twice is CS0101/CS0111.
+//
+// That is exactly what happened: #161 (lists schema UI) and #173 (AI gating)
+// were developed in parallel and each added one. Git reported both MERGEABLE
+// because they touched different files; only the compiler objected. The AI
+// views reference the existing one, which is namespace-visible without a using.
+//
+// If you need a converter here, check ListsViewConverters.cs and
+// CommonConverters.cs first.
 
 /// <summary>
 /// An <see cref="AiNoticeKind"/> to its Strata colour. Amber <c>#F0A830</c> — the

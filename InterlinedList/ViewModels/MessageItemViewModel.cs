@@ -19,6 +19,7 @@ public partial class MessageItemViewModel : ObservableObject
     private readonly InterlinedApiClient _api;
     private readonly string? _currentUserId;
     private readonly bool _publiclyVisible;
+    private readonly bool _showLinkPreviews;
 
     public string Id { get; }
     public string TimeFormatted { get; }
@@ -35,13 +36,78 @@ public partial class MessageItemViewModel : ObservableObject
     public IReadOnlyList<string> VideoUrls { get; }
     public bool HasVideos => VideoUrls.Count > 0;
 
+    /// <summary>
+    /// Freeform tags on this message. Rendered as clickable chips; the click is
+    /// routed to the feed's tag filter, not handled here (the card has no view of
+    /// the feed's paging state).
+    /// </summary>
+    public IReadOnlyList<string> Tags { get; }
+    public bool HasTags => Tags.Count > 0;
+
+    /// <summary>
+    /// Unfurled link cards, from the <c>linkMetadata</c> that arrives inline on
+    /// the feed — no extra request. Empty when the viewer has previews switched
+    /// off (<c>GET /api/user</c> → <c>showPreviews</c>) or when every unfurl for
+    /// this message failed.
+    /// </summary>
+    public IReadOnlyList<LinkPreviewViewModel> LinkPreviews { get; }
+    public bool HasLinkPreviews => LinkPreviews.Count > 0;
+
     public ObservableCollection<MessageItemViewModel> Replies { get; } = new();
 
+    // ── Push / Quote ────────────────────────────────────────────────────────────
+
+    /// <summary>This card is itself a Push or a Quote of another message.</summary>
+    public bool IsPushOrQuote { get; }
+
+    /// <summary>A bare repost: pushed, with no commentary of its own.</summary>
+    public bool IsPush { get; }
+
+    /// <summary>A push that added a note. The API has one field for both.</summary>
+    public bool IsQuote { get; }
+
+    /// <summary>Badge above the header row; null on an ordinary post.</summary>
+    public string? RepostLabel => IsQuote ? "❝ Quoted" : IsPush ? "↻ Pushed" : null;
+
+    /// <summary>A bare push has no body text of its own — collapse the body block.</summary>
+    public bool HasContent => !string.IsNullOrWhiteSpace(Content);
+
+    /// <summary>
+    /// What a Push/Quote from this card re-shares. Pushing a <i>bare push</i>
+    /// targets the original instead of the push, so the result is a one-level
+    /// quote we can actually render — no chain of empty cards. Quoting a Quote
+    /// still targets the quote, because a quote carries its own commentary.
+    /// Client-side choice: no nested <c>pushedMessage</c> appeared in the sampled
+    /// feed, so the server's own chaining behaviour is unverified.
+    /// </summary>
+    public string PushTargetId { get; }
+
+    public bool HasQuotedOriginal { get; }
+    public string? QuotedAuthorDisplayName { get; }
+    public string? QuotedAuthorHandle { get; }
+    public string? QuotedAuthorUsername { get; }
+    public string? QuotedAvatarUrl { get; }
+    public string? QuotedContent { get; }
+    public string? QuotedTimeFormatted { get; }
+    public IReadOnlyList<string> QuotedImageUrls { get; }
+    public bool QuotedHasImages => QuotedImageUrls.Count > 0;
+
+    /// <summary>
+    /// Raised after this card publishes something (a Push or a Quote) so the feed
+    /// that owns it can re-fetch — the write endpoints' response envelopes aren't
+    /// parsed, per the codebase's read-after-write discipline.
+    /// </summary>
+    public event EventHandler? Posted;
+
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasContent))]
     private string content;
 
     [ObservableProperty]
     private int digCount;
+
+    [ObservableProperty]
+    private int pushCount;
 
     [ObservableProperty]
     private bool dugByMe;
@@ -68,13 +134,27 @@ public partial class MessageItemViewModel : ObservableObject
     private string replyText = "";
 
     [ObservableProperty]
+    private bool isComposingQuote;
+
+    [ObservableProperty]
+    private string quoteText = "";
+
+    [ObservableProperty]
     private string? errorMessage;
 
-    public MessageItemViewModel(Message message, InterlinedApiClient api, string? currentUserId)
+    /// <param name="showLinkPreviews">
+    /// The viewer's <c>showPreviews</c> preference. Defaults to <c>false</c> —
+    /// off unless a caller opts in — so a surface that hasn't been taught about
+    /// the preference can't accidentally render previews against the user's
+    /// wishes. <see cref="FeedViewModel"/> passes the real value; other callers
+    /// (e.g. a profile's message list) currently keep the default.
+    /// </param>
+    public MessageItemViewModel(Message message, InterlinedApiClient api, string? currentUserId, bool showLinkPreviews = false)
     {
         _api = api;
         _currentUserId = currentUserId;
         _publiclyVisible = message.PubliclyVisible;
+        _showLinkPreviews = showLinkPreviews;
 
         Id = message.Id;
         content = message.Content;
@@ -86,9 +166,29 @@ public partial class MessageItemViewModel : ObservableObject
         IsMine = message.UserId == currentUserId;
         ImageUrls = message.ImageUrls ?? new List<string>();
         VideoUrls = message.VideoUrls ?? new List<string>();
+        Tags = message.Tags ?? new List<string>();
+        LinkPreviews = showLinkPreviews
+            ? message.LinkMetadata.SuccessfulLinks().Select(l => new LinkPreviewViewModel(l)).ToList()
+            : new List<LinkPreviewViewModel>();
 
         digCount = message.DigCount;
+        pushCount = message.PushCount;
         dugByMe = message.DugByMe;
+
+        IsPushOrQuote = message.IsPushOrQuote;
+        IsQuote = message.IsQuote;
+        IsPush = message.IsPushOrQuote && !message.IsQuote;
+        PushTargetId = IsPush ? message.PushedMessageId! : message.Id;
+
+        var original = message.PushedMessage;
+        HasQuotedOriginal = original is not null;
+        QuotedAuthorDisplayName = original?.AuthorDisplayName;
+        QuotedAuthorHandle = original?.AuthorHandle;
+        QuotedAuthorUsername = original?.User?.Username;
+        QuotedAvatarUrl = original?.User?.Avatar;
+        QuotedContent = original?.Content;
+        QuotedTimeFormatted = original?.TimeFormatted;
+        QuotedImageUrls = original?.ImageUrls ?? new List<string>();
     }
 
     [RelayCommand]
@@ -131,6 +231,84 @@ public partial class MessageItemViewModel : ObservableObject
         {
             IsBusy = false;
         }
+    }
+
+    // ── Push (repost) / Quote ───────────────────────────────────────────────────
+
+    private bool CanPush() => !IsBusy;
+
+    /// <summary>
+    /// Push (repost) as-is — no comment, always public. Posts directly, per the
+    /// product behaviour in <c>/help/messages</c>; Quote is the path that asks
+    /// for confirmation first (it has a composer to show the banner in).
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanPush))]
+    private async Task PushAsync()
+    {
+        IsBusy = true;
+        PushCount++;
+        try
+        {
+            await _api.PushMessageAsync(PushTargetId);
+            ErrorMessage = null;
+            Posted?.Invoke(this, EventArgs.Empty);
+        }
+        catch (InterlinedApiException ex)
+        {
+            PushCount--;
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    [RelayCommand]
+    private void StartQuote() => IsComposingQuote = true;
+
+    [RelayCommand]
+    private void CancelQuote()
+    {
+        IsComposingQuote = false;
+        QuoteText = "";
+    }
+
+    private bool CanPostQuote() => !IsBusy && !string.IsNullOrWhiteSpace(QuoteText);
+
+    /// <summary>
+    /// Quote = push + commentary. Forced public: the composer shows the "always
+    /// public" banner while this is open, which is the confirmation the product
+    /// calls for.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanPostQuote))]
+    private async Task PostQuoteAsync()
+    {
+        IsBusy = true;
+        try
+        {
+            await _api.QuoteMessageAsync(PushTargetId, QuoteText.Trim());
+            QuoteText = "";
+            IsComposingQuote = false;
+            PushCount++;
+            ErrorMessage = null;
+            Posted?.Invoke(this, EventArgs.Empty);
+        }
+        catch (InterlinedApiException ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    [RelayCommand]
+    private void OpenQuotedAuthor()
+    {
+        if (!string.IsNullOrEmpty(QuotedAuthorUsername))
+            Navigator.OpenProfile(QuotedAuthorUsername);
     }
 
     // ── Edit (own message) ──────────────────────────────────────────────────────
@@ -211,7 +389,7 @@ public partial class MessageItemViewModel : ObservableObject
             var replies = await _api.GetRepliesAsync(Id);
             Replies.Clear();
             foreach (var reply in replies)
-                Replies.Add(new MessageItemViewModel(reply, _api, _currentUserId));
+                Replies.Add(new MessageItemViewModel(reply, _api, _currentUserId, _showLinkPreviews));
             AreRepliesVisible = true;
         }
         catch (InterlinedApiException ex)
@@ -244,7 +422,7 @@ public partial class MessageItemViewModel : ObservableObject
             var replies = await _api.GetRepliesAsync(Id);
             Replies.Clear();
             foreach (var reply in replies)
-                Replies.Add(new MessageItemViewModel(reply, _api, _currentUserId));
+                Replies.Add(new MessageItemViewModel(reply, _api, _currentUserId, _showLinkPreviews));
             AreRepliesVisible = true;
         }
         catch (InterlinedApiException ex)
@@ -269,4 +447,11 @@ public partial class MessageItemViewModel : ObservableObject
 
     partial void OnEditTextChanged(string value) => SaveEditCommand.NotifyCanExecuteChanged();
     partial void OnReplyTextChanged(string value) => PostReplyCommand.NotifyCanExecuteChanged();
+    partial void OnQuoteTextChanged(string value) => PostQuoteCommand.NotifyCanExecuteChanged();
+
+    partial void OnIsBusyChanged(bool value)
+    {
+        PushCommand.NotifyCanExecuteChanged();
+        PostQuoteCommand.NotifyCanExecuteChanged();
+    }
 }
