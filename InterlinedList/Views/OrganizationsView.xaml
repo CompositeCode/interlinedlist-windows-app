@@ -525,26 +525,56 @@
                                    Foreground="{DynamicResource TextMutedBrush}"
                                    Style="{StaticResource NoMembersHintStyle}"/>
 
-                        <!-- Add member (owner/admin only) -->
+                        <!-- Add member. Visible to owners and admins, but the
+                             candidate SEARCH is owner-only: the server rejects
+                             an admin with 403 "Only organization owners can
+                             search for users to add". So the search row is
+                             gated on CanSearchCandidates and admins get an
+                             explanation instead of a box that always fails. -->
                         <StackPanel Margin="0,16,0,0"
                                     Style="{StaticResource ManageOnlyStyle}">
                             <TextBlock Text="ADD MEMBER"
                                        FontSize="10" FontWeight="SemiBold"
                                        Foreground="{DynamicResource TextMutedBrush}"
                                        Margin="0,0,0,8"/>
-                            <DockPanel Margin="0,0,0,8">
-                                <Button DockPanel.Dock="Right"
-                                        Content="Search"
-                                        Command="{Binding SearchUsersCommand}"
-                                        Style="{StaticResource PrimaryBtnStyle}"
-                                        Margin="8,0,0,0"/>
-                                <TextBox Text="{Binding MemberSearchQuery, UpdateSourceTrigger=PropertyChanged}"
-                                         Style="{StaticResource FieldStyle}"
-                                         Margin="0"
-                                         VerticalContentAlignment="Center"/>
-                            </DockPanel>
-                            <ItemsControl ItemsSource="{Binding UserSearchResults}"
-                                          ItemTemplate="{StaticResource UserResultTemplate}"/>
+
+                            <StackPanel Visibility="{Binding CanSearchCandidates, Converter={StaticResource BoolToVisibility}}">
+                                <DockPanel Margin="0,0,0,8">
+                                    <Button DockPanel.Dock="Right"
+                                            Content="Search"
+                                            Command="{Binding SearchUsersCommand}"
+                                            Style="{StaticResource PrimaryBtnStyle}"
+                                            Margin="8,0,0,0"/>
+                                    <TextBox Text="{Binding MemberSearchQuery, UpdateSourceTrigger=PropertyChanged}"
+                                             Style="{StaticResource FieldStyle}"
+                                             Margin="0"
+                                             VerticalContentAlignment="Center"/>
+                                </DockPanel>
+                                <ItemsControl ItemsSource="{Binding UserSearchResults}"
+                                              ItemTemplate="{StaticResource UserResultTemplate}"/>
+                                <TextBlock Text="Nobody new matched that search. People already in this organization aren't listed."
+                                           FontSize="11"
+                                           TextWrapping="Wrap"
+                                           Foreground="{DynamicResource TextMutedBrush}"
+                                           Margin="0,4,0,0"
+                                           Visibility="{Binding NoCandidatesFound, Converter={StaticResource BoolToVisibility}}"/>
+                            </StackPanel>
+
+                            <TextBlock Text="Only the organization's owner can search for people to add."
+                                       FontSize="11"
+                                       TextWrapping="Wrap"
+                                       Foreground="{DynamicResource TextMutedBrush}">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding CanSearchCandidates}" Value="True">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
                         </StackPanel>
                     </StackPanel>
                 </ScrollViewer>
