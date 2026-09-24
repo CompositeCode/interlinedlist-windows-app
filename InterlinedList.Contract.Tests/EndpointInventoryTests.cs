@@ -26,7 +26,15 @@ public sealed class EndpointInventoryTests
     private static readonly Regex PathLiteral = new("\"\\$?(api/[^\"]*)\"", RegexOptions.Compiled);
     private static readonly Regex HttpVerb = new(@"HttpMethod\.(Get|Post|Put|Patch|Delete)", RegexOptions.Compiled);
     private static readonly Regex Interpolation = new(@"\{Uri\.EscapeDataString\(([A-Za-z0-9_]+)\)\}", RegexOptions.Compiled);
-    private static readonly Regex GetHelper = new(@"\bGet[A-Za-z]*Async\s*[<(]", RegexOptions.Compiled);
+    /// <summary>
+    /// A read helper, by name. <c>Get…Async</c> covers the shared plumbing
+    /// (<c>GetJsonAsync</c>, <c>GetElementAsync</c>, <c>GetStringAsync</c>,
+    /// <c>GetUserArrayAsync</c>) and most domain helpers; <c>Read…Async</c>
+    /// covers the ones that read more naturally that way, like
+    /// <c>ReadTagsAsync</c>. Both unambiguously denote a GET.
+    /// </summary>
+    private static readonly Regex GetHelper =
+        new(@"\b(Get|Read)[A-Za-z]*Async\s*[<(]", RegexOptions.Compiled);
 
     /// <summary>
     /// A helper whose NAME carries its verb — <c>Get…Async</c>, <c>Put…Async</c>,

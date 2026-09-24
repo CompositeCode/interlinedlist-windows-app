@@ -186,3 +186,28 @@ POST	api/auth/reset-password	skip	A successful reset would change the shared acc
 POST	api/auth/verify-email	skip	Consumes a single-use emailed token; no token is obtainable without a mailbox.
 POST	api/auth/verify-email-change	skip	Consumes a single-use emailed token, and would change the account's address.
 POST	api/auth/undo-email-change	skip	Would reverse a real pending email change.
+
+# ── Added 2026-09-24 (second batch): blog, list folders, invites, tags,
+#    link metadata, weather/location, and the GitHub-backed list refresh.
+#    Same story as the batch above — the inventory test flagged every one.
+GET	api/folders	read
+GET	api/tags/trending	read
+GET	api/tags/autocomplete	read
+GET	api/link-metadata	read
+GET	api/documents/{documentId}	read
+GET	api/messages/{messageId}/metadata	read
+GET	api/weather	skip	Requires latitude/longitude and is US-only; the probe would assert against a real user's stored profile location.
+GET	api/location	skip	Same coordinate dependency as weather.
+GET	api/lists/{listId}/invites	skip	Owner-only and the suite owns no list; probing the account's single real list risks confusion with a user's own data.
+GET	api/documents/{documentId}/invites	skip	Owner-only; same reasoning as the list invites.
+GET	api/blog/subscribe/confirm	skip	Consumes a single-use token from a confirmation email.
+POST	api/folders	skip	Creates a real list folder (subscriber-gated).
+PUT	api/folders/{id}	skip	Renames or moves a real folder — and the server does NOT reject a cycle, so a careless move corrupts the tree.
+DELETE	api/folders/{id}	skip	Soft-deletes a folder AND its subfolders.
+POST	api/lists/{listId}/invites	skip	Sends a real invite email to a real address.
+DELETE	api/lists/{listId}/invites/{token}	skip	Revokes a real invite; nothing safe to revoke without first creating one.
+POST	api/documents/{documentId}/invites	skip	Sends a real invite email.
+DELETE	api/documents/{documentId}/invites/{token}	skip	Revokes a real invite.
+POST	api/lists/{listId}/refresh	skip	Re-syncs a GitHub-backed list from its repository; 400 on a local list, and the account owns no GitHub-backed list to refresh.
+POST	api/blog/subscribe	skip	Sends a real double-opt-in email to whatever address is passed.
+POST	api/blog/unsubscribe	skip	Needs a token from an email footer, and would unsubscribe a real address.
