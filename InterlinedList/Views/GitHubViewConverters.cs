@@ -4,16 +4,6 @@ using System.Windows.Data;
 
 namespace InterlinedList.Views;
 
-/// <summary>Visible when the bound bool is <c>false</c> — for "not connected" prompts.</summary>
-public sealed class InverseBoolToVisibilityConverter : IValueConverter
-{
-    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
-        value is true ? Visibility.Collapsed : Visibility.Visible;
-
-    public object ConvertBack(object value, Type targetType, object? parameter, CultureInfo culture) =>
-        throw new NotSupportedException();
-}
-
 /// <summary>
 /// Visible <b>only</b> on an explicit <c>true</c> — a <c>null</c> stays hidden.
 ///
@@ -31,19 +21,6 @@ public sealed class TrueOnlyToVisibilityConverter : IValueConverter
 {
     public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
         value is true ? Visibility.Visible : Visibility.Collapsed;
-
-    public object ConvertBack(object value, Type targetType, object? parameter, CultureInfo culture) =>
-        throw new NotSupportedException();
-}
-
-/// <summary>
-/// Visible when the bound value is not null — the counterpart to
-/// <see cref="InverseNullToVisibilityConverter"/>.
-/// </summary>
-public sealed class NotNullToVisibilityConverter : IValueConverter
-{
-    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
-        value is null ? Visibility.Collapsed : Visibility.Visible;
 
     public object ConvertBack(object value, Type targetType, object? parameter, CultureInfo culture) =>
         throw new NotSupportedException();

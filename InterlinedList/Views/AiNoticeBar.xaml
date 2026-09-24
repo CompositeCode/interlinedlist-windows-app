@@ -1,0 +1,45 @@
+<UserControl x:Class="InterlinedList.Views.AiNoticeBar"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:InterlinedList.Views"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d"
+             x:Name="Root">
+
+    <!--
+        One AI message, rendered in place. Deliberately a bound Border and two
+        TextBlocks and nothing else: #10 requires these never block the
+        dispatcher, so there is no MessageBox, no Popup and no adorner anywhere
+        in this control.
+
+        quota_exceeded / rate_limited / model-declined read amber with their own
+        short label, so they are distinguishable from each other and from the
+        red "FAILED" state at a glance.
+    -->
+    <UserControl.Resources>
+        <local:NotNullToVisibilityConverter x:Key="NotNullToVisibility"/>
+        <local:AiNoticeBrushConverter x:Key="NoticeBrush"/>
+        <local:AiNoticeLabelConverter x:Key="NoticeLabel"/>
+    </UserControl.Resources>
+
+    <Border Background="{DynamicResource Surface3Brush}"
+            BorderThickness="3,0,0,0"
+            BorderBrush="{Binding Notice.Kind, ElementName=Root, Converter={StaticResource NoticeBrush}}"
+            CornerRadius="0,3,3,0"
+            Padding="10,8"
+            Visibility="{Binding Notice, ElementName=Root, Converter={StaticResource NotNullToVisibility}}">
+        <StackPanel>
+            <TextBlock Text="{Binding Notice.Kind, ElementName=Root, Converter={StaticResource NoticeLabel}}"
+                       FontSize="9"
+                       FontWeight="SemiBold"
+                       FontFamily="JetBrains Mono, Consolas"
+                       Foreground="{Binding Notice.Kind, ElementName=Root, Converter={StaticResource NoticeBrush}}"
+                       Margin="0,0,0,3"/>
+            <TextBlock Text="{Binding Notice.Text, ElementName=Root}"
+                       FontSize="11"
+                       TextWrapping="Wrap"
+                       Foreground="{DynamicResource TextBodyBrush}"/>
+        </StackPanel>
+    </Border>
+</UserControl>

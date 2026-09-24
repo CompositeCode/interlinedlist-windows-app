@@ -1,0 +1,407 @@
+<UserControl x:Class="InterlinedList.Views.PoweredDocumentPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:InterlinedList.ViewModels"
+             xmlns:local="clr-namespace:InterlinedList.Views"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d"
+             d:DesignWidth="620">
+
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
+        <local:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibility"/>
+        <local:NullOrEmptyToVisibilityConverter x:Key="NullOrEmptyToVisibility"/>
+
+        <Style x:Key="AiDocFieldStyle" TargetType="TextBox">
+            <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextBodyBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="8,6"/>
+            <Setter Property="FontSize" Value="13"/>
+        </Style>
+
+        <Style x:Key="AiDocPrimaryBtnStyle" TargetType="Button">
+            <Setter Property="Background" Value="{DynamicResource PrimaryBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="14,6"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" CornerRadius="4" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="{DynamicResource PrimaryHoverBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="AiDocSmallBtnStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="10,3"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Margin" Value="0,0,6,0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="3"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <!-- Collapses entirely when the AI gate is closed — see #10. -->
+    <Border Background="{DynamicResource Surface2Brush}"
+            BorderBrush="{DynamicResource BorderBrush}"
+            BorderThickness="1"
+            CornerRadius="4"
+            Visibility="{Binding IsAiAvailable, Converter={StaticResource BoolToVisibility}}">
+        <StackPanel>
+
+            <!-- ── Header ───────────────────────────────────────────────── -->
+            <Grid Margin="12,10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Ellipse Width="7" Height="7"
+                             Fill="{StaticResource AmberBrush}"
+                             VerticalAlignment="Center"
+                             Margin="0,0,8,0"/>
+                    <TextBlock Text="Powered Document"
+                               FontSize="13" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextBrush}"
+                               VerticalAlignment="Center"/>
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <local:AiQuotaChip Margin="0,0,8,0"/>
+                    <Button Command="{Binding ToggleOpenCommand}"
+                            Style="{StaticResource AiDocSmallBtnStyle}"
+                            Margin="0">
+                        <Button.Content>
+                            <TextBlock>
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Text" Value="Draft with AI"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsOpen}" Value="True">
+                                                <Setter Property="Text" Value="Close"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Button.Content>
+                    </Button>
+                </StackPanel>
+            </Grid>
+
+            <!-- ── Body ─────────────────────────────────────────────────── -->
+            <StackPanel Margin="12,0,12,12"
+                        Visibility="{Binding IsOpen, Converter={StaticResource BoolToVisibility}}">
+
+                <!-- Mode picker: exactly the four documented modes, never a free string. -->
+                <TextBlock Text="HOW SHOULD IT DRAFT?"
+                           FontSize="10" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextMutedBrush}"
+                           Margin="0,0,0,4"/>
+                <ComboBox ItemsSource="{Binding Modes}"
+                          SelectedItem="{Binding SelectedMode}"
+                          DisplayMemberPath="Label"
+                          FontSize="12"/>
+                <TextBlock Text="{Binding ModeHint}"
+                           FontSize="10"
+                           Foreground="{DynamicResource TextMutedBrush}"
+                           TextWrapping="Wrap"
+                           Margin="0,4,0,0"/>
+
+                <!-- ── Source: from_list ────────────────────────────────── -->
+                <StackPanel Margin="0,10,0,0"
+                            Visibility="{Binding IsListMode, Converter={StaticResource BoolToVisibility}}">
+                    <TextBlock Text="SOURCE LIST"
+                               FontSize="10" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextMutedBrush}"
+                               Margin="0,0,0,4"/>
+                    <DockPanel>
+                        <Button DockPanel.Dock="Right"
+                                Content="Reload"
+                                Command="{Binding ReloadSourcesCommand}"
+                                Style="{StaticResource AiDocSmallBtnStyle}"
+                                Margin="6,0,0,0"/>
+                        <ComboBox ItemsSource="{Binding MyLists}"
+                                  SelectedItem="{Binding SelectedList}"
+                                  DisplayMemberPath="Title"
+                                  FontSize="12"/>
+                    </DockPanel>
+                </StackPanel>
+
+                <!-- ── Source: from_article ─────────────────────────────── -->
+                <StackPanel Margin="0,10,0,0"
+                            Visibility="{Binding IsArticleSourceMode, Converter={StaticResource BoolToVisibility}}">
+                    <TextBlock Text="SOURCE DOCUMENT"
+                               FontSize="10" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextMutedBrush}"
+                               Margin="0,0,0,4"/>
+                    <DockPanel>
+                        <Button DockPanel.Dock="Right"
+                                Content="Reload"
+                                Command="{Binding ReloadSourcesCommand}"
+                                Style="{StaticResource AiDocSmallBtnStyle}"
+                                Margin="6,0,0,0"/>
+                        <ComboBox ItemsSource="{Binding MyDocuments}"
+                                  SelectedItem="{Binding SelectedDocument}"
+                                  DisplayMemberPath="Title"
+                                  FontSize="12"/>
+                    </DockPanel>
+                </StackPanel>
+
+                <!-- ── Source: research_url ─────────────────────────────── -->
+                <StackPanel Margin="0,10,0,0"
+                            Visibility="{Binding IsUrlMode, Converter={StaticResource BoolToVisibility}}">
+                    <TextBlock Text="URL TO RESEARCH"
+                               FontSize="10" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextMutedBrush}"
+                               Margin="0,0,0,4"/>
+                    <TextBox Text="{Binding SourceUrl, UpdateSourceTrigger=PropertyChanged}"
+                             Style="{StaticResource AiDocFieldStyle}"
+                             FontFamily="JetBrains Mono, Consolas"
+                             FontSize="11"/>
+                </StackPanel>
+
+                <TextBlock Text="Loading your lists and documents…"
+                           FontSize="10"
+                           Foreground="{DynamicResource TextMutedBrush}"
+                           Margin="0,4,0,0"
+                           Visibility="{Binding IsLoadingSources, Converter={StaticResource BoolToVisibility}}"/>
+
+                <!--
+                    The source-field error. #15's last acceptance criterion: a
+                    422 invalid_input on a missing or non-owned reference lands
+                    HERE, beside the picker that caused it — not in the generic
+                    notice slot below.
+                -->
+                <Border Background="{DynamicResource Surface3Brush}"
+                        BorderBrush="{StaticResource AmberBrush}"
+                        BorderThickness="3,0,0,0"
+                        CornerRadius="0,3,3,0"
+                        Padding="8,6"
+                        Margin="0,6,0,0"
+                        Visibility="{Binding SourceError, Converter={StaticResource NullOrEmptyToVisibility}}">
+                    <TextBlock Text="{Binding SourceError}"
+                               FontSize="11"
+                               TextWrapping="Wrap"
+                               Foreground="{DynamicResource TextBodyBrush}"/>
+                </Border>
+
+                <!-- ── Topic / instruction ──────────────────────────────── -->
+                <TextBlock Text="WHAT SHOULD IT SAY?"
+                           FontSize="10" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextMutedBrush}"
+                           Margin="0,12,0,4"/>
+                <TextBox Text="{Binding Topic, UpdateSourceTrigger=PropertyChanged}"
+                         Style="{StaticResource AiDocFieldStyle}"
+                         AcceptsReturn="True"
+                         TextWrapping="Wrap"
+                         MinHeight="54"/>
+
+                <DockPanel Margin="0,6,0,0">
+                    <Button DockPanel.Dock="Right"
+                            Content="Draft it"
+                            Command="{Binding SuggestCommand}"
+                            Style="{StaticResource AiDocPrimaryBtnStyle}"/>
+                    <TextBlock VerticalAlignment="Center"
+                               FontSize="10"
+                               FontFamily="JetBrains Mono, Consolas"
+                               Text="{Binding WordCountLabel}">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsOverWordCap}" Value="True">
+                                        <Setter Property="Foreground" Value="{StaticResource AmberBrush}"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                </DockPanel>
+
+                <TextBlock Text="{Binding BusyText}"
+                           FontSize="11"
+                           Foreground="{StaticResource AmberBrush}"
+                           TextWrapping="Wrap"
+                           Margin="0,8,0,0"
+                           Visibility="{Binding BusyText, Converter={StaticResource NullOrEmptyToVisibility}}"/>
+
+                <local:AiNoticeBar Notice="{Binding Notice}" Margin="0,8,0,0"/>
+
+                <!-- ── Preview ──────────────────────────────────────────── -->
+                <Border Background="{DynamicResource Surface3Brush}"
+                        BorderBrush="{DynamicResource BorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="4"
+                        Padding="12,10"
+                        Margin="0,12,0,0"
+                        Visibility="{Binding HasPreview, Converter={StaticResource BoolToVisibility}}">
+                    <StackPanel>
+                        <TextBlock Text="PROPOSED DOCUMENT"
+                                   FontSize="10" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextMutedBrush}"
+                                   Margin="0,0,0,6"/>
+
+                        <TextBox Text="{Binding DraftTitle, UpdateSourceTrigger=PropertyChanged}"
+                                 Style="{StaticResource AiDocFieldStyle}"
+                                 FontWeight="SemiBold"/>
+
+                        <!-- The model's section plan, read-only context. -->
+                        <StackPanel Margin="0,8,0,0"
+                                    Visibility="{Binding HasOutline, Converter={StaticResource BoolToVisibility}}">
+                            <TextBlock Text="OUTLINE"
+                                       FontSize="9" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextMutedBrush}"
+                                       Margin="0,0,0,3"/>
+                            <ItemsControl ItemsSource="{Binding DraftOutline}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Background="{DynamicResource Surface2Brush}"
+                                                BorderBrush="{DynamicResource BorderBrush}"
+                                                BorderThickness="1"
+                                                CornerRadius="3"
+                                                Padding="6,2"
+                                                Margin="0,0,4,4">
+                                            <TextBlock Text="{Binding}"
+                                                       FontSize="10"
+                                                       Foreground="{DynamicResource TextMutedBrush}"/>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+
+                        <!-- Rendered / source toggle. The markdown is the single
+                             point of truth; the rendered view projects it. -->
+                        <DockPanel Margin="0,10,0,4">
+                            <Button DockPanel.Dock="Right"
+                                    Command="{Binding ToggleSourceViewCommand}"
+                                    Style="{StaticResource AiDocSmallBtnStyle}"
+                                    Margin="0">
+                                <Button.Content>
+                                    <TextBlock>
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Text" Value="Edit markdown"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding ShowMarkdownSource}" Value="True">
+                                                        <Setter Property="Text" Value="Show rendered"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </Button.Content>
+                            </Button>
+                            <TextBlock VerticalAlignment="Center"
+                                       FontSize="10"
+                                       FontFamily="JetBrains Mono, Consolas"
+                                       Text="{Binding CharacterCountLabel}">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsOverCharacterCap}" Value="True">
+                                                <Setter Property="Foreground" Value="{StaticResource AmberBrush}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </DockPanel>
+
+                        <!-- Rendered -->
+                        <Border Background="{DynamicResource SurfaceBrush}"
+                                BorderBrush="{DynamicResource BorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="3"
+                                Padding="12,10"
+                                Visibility="{Binding ShowMarkdownSource, Converter={StaticResource InverseBoolToVisibility}}">
+                            <local:MarkdownViewer Markdown="{Binding DraftMarkdown}"
+                                                  MaxHeight="340"/>
+                        </Border>
+
+                        <!-- Editable source -->
+                        <TextBox Text="{Binding DraftMarkdown, UpdateSourceTrigger=PropertyChanged}"
+                                 Style="{StaticResource AiDocFieldStyle}"
+                                 AcceptsReturn="True"
+                                 AcceptsTab="True"
+                                 TextWrapping="Wrap"
+                                 VerticalScrollBarVisibility="Auto"
+                                 FontFamily="JetBrains Mono, Consolas"
+                                 FontSize="11.5"
+                                 Height="340"
+                                 Visibility="{Binding ShowMarkdownSource, Converter={StaticResource BoolToVisibility}}"/>
+
+                        <CheckBox Content="Make this document publicly readable"
+                                  IsChecked="{Binding DraftIsPublic}"
+                                  FontSize="11"
+                                  Foreground="{DynamicResource TextBodyBrush}"
+                                  Margin="0,10,0,0"/>
+
+                        <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                            <Button Content="Save as document"
+                                    Command="{Binding ConfirmCommand}"
+                                    Style="{StaticResource AiDocPrimaryBtnStyle}"
+                                    Margin="0,0,8,0"/>
+                            <Button Content="Discard draft"
+                                    Command="{Binding DiscardCommand}"
+                                    Style="{StaticResource AiDocSmallBtnStyle}"/>
+                        </StackPanel>
+
+                        <TextBlock Text="{Binding UsageLabel}"
+                                   FontSize="9"
+                                   FontFamily="JetBrains Mono, Consolas"
+                                   Foreground="{DynamicResource TextMutedBrush}"
+                                   Margin="0,8,0,0"
+                                   Visibility="{Binding UsageLabel, Converter={StaticResource NullOrEmptyToVisibility}}"/>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</UserControl>
