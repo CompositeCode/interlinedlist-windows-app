@@ -48,10 +48,24 @@ public partial class ProfileSummaryViewModel : ObservableObject
         }
     }
 
+    // Async now because sign-out talks to the server before tearing down local
+    // state. SessionService.LogoutAsync never throws and never leaves the local
+    // session behind, so there is nothing to catch here and no failure path that
+    // should keep the user on this screen — we always raise LoggedOut.
     [RelayCommand]
-    private void Logout()
+    private async Task LogoutAsync()
     {
-        _session.Logout();
+        var outcome = await _session.LogoutAsync();
+        if (outcome != LogoutOutcome.TokenRevoked)
+        {
+            // Expected today: the server has no way for a client to invalidate
+            // its own sync-token. The local credential is gone (which also stops
+            // the sync tray utility), but the token itself still works for anyone
+            // who already has a copy.
+            AppLog.Warn("Signed out on this device, but the sync-token is still valid server-side. " +
+                        "Revoke it from Settings → API sessions while signed in on another device.");
+        }
+
         LoggedOut?.Invoke(this, EventArgs.Empty);
     }
 }
