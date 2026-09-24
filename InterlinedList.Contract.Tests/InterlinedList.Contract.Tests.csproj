@@ -81,8 +81,10 @@
            AppLog.cs                 -> System.Diagnostics, Windows Event Log
            CredentialStore.cs        -> System.Security.Cryptography, DPAPI
            SessionService.cs         -> CommunityToolkit.Mvvm
-           AppServices.cs            -> transitively needs SessionService
+           AiAvailabilityService.cs  -> CommunityToolkit.Mvvm
+           AppServices.cs            -> transitively needs the two above
            ProfileLocationProvider.cs-> transitively needs SessionService
+           GitHubListIndex.cs        -> uses AppServices and AppLog
          If you add a file needing WPF, DPAPI, the Event Log or the MVVM toolkit
          — or one that merely references such a file — exclude it here too. And
          prefer not to: portability is what lets this suite run on
@@ -90,7 +92,7 @@
          stayed portable. -->
     <Compile Include="..\InterlinedList\Models\*.cs" LinkBase="AppSource\Models" />
     <Compile Include="..\InterlinedList\Services\*.cs" LinkBase="AppSource\Services"
-             Exclude="..\InterlinedList\Services\AppLog.cs;..\InterlinedList\Services\CredentialStore.cs;..\InterlinedList\Services\SessionService.cs;..\InterlinedList\Services\AppServices.cs;..\InterlinedList\Services\ProfileLocationProvider.cs" />
+             Exclude="..\InterlinedList\Services\AppLog.cs;..\InterlinedList\Services\CredentialStore.cs;..\InterlinedList\Services\SessionService.cs;..\InterlinedList\Services\AiAvailabilityService.cs;..\InterlinedList\Services\AppServices.cs;..\InterlinedList\Services\ProfileLocationProvider.cs;..\InterlinedList\Services\GitHubListIndex.cs" />
   </ItemGroup>
 
   <!-- The endpoint-inventory test reads the client sources as *text* to rediscover

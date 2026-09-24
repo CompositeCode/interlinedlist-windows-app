@@ -159,6 +159,59 @@ internal static class ReadProbes
                 return $"{page.Organizations.Count} organizations (pagination={(page.Pagination is null ? "absent, as the model allows" : "present")})";
             },
 
+            // ── Added 2026-09-24 (second batch) ─────────────────────────────────
+
+            ["GET api/folders"] = async e =>
+            {
+                var folders = await e.Client.GetListFoldersAsync();
+                // Nesting is expressed only through parentId — the payload is flat.
+                Assert.All(folders, f => Assert.False(string.IsNullOrWhiteSpace(f.Id)));
+                return $"{folders.Count} list folder(s), {folders.Count(f => f.IsRoot)} at root";
+            },
+
+            ["GET api/tags/trending"] = async e =>
+            {
+                var tags = await e.Client.GetTrendingTagsAsync();
+                Assert.All(tags, t => Assert.False(string.IsNullOrWhiteSpace(t.Tag)));
+                return $"{tags.Count} trending tag(s)";
+            },
+
+            ["GET api/tags/autocomplete"] = async e =>
+            {
+                // An empty q is a 400, so the client short-circuits it; use a
+                // single letter, which matches broadly without assuming content.
+                var tags = await e.Client.AutocompleteTagsAsync("a");
+                return $"{tags.Count} completion(s) for 'a'";
+            },
+
+            ["GET api/link-metadata"] = async e =>
+            {
+                // A stable, long-lived URL — this asserts the unfurler answers,
+                // not that any particular site is up.
+                var link = await e.Client.GetLinkMetadataAsync("https://example.com/");
+                return link is null
+                    ? "no metadata returned for example.com"
+                    : $"platform={link.Platform ?? "(none)"}, title={(link.Metadata?.Title is { Length: > 0 } t ? t : "(none)")}";
+            },
+
+            ["GET api/documents/{documentId}"] = async e =>
+            {
+                var id = Require(e.Ids.DocumentId, "GET api/documents/{documentId}", "the account has no document to address");
+                var doc = await e.Client.GetDocumentAsync(id);
+                // The tree omits `content`; this is the only bulk source of a body,
+                // so the editor breaks if it stops carrying one.
+                Assert.False(string.IsNullOrWhiteSpace(doc.Id));
+                return $"document {doc.Title}, content {(doc.Content is null ? "absent" : $"{doc.Content.Length} chars")}";
+            },
+
+            ["GET api/messages/{messageId}/metadata"] = async e =>
+            {
+                var id = Require(e.Ids.MessageId, "GET api/messages/{messageId}/metadata", "the feed returned no message to address");
+                var links = await e.Client.GetMessageLinkMetadataAsync(id);
+                // A message with no links legitimately returns an empty set.
+                return $"{links.Count} stored link preview(s)";
+            },
+
             // ── Added 2026-09-24 with the parity merge pass ─────────────────────
             // The inventory test demanded these: classifying an endpoint 'read'
             // in the manifest without a probe here is a failure, deliberately.
