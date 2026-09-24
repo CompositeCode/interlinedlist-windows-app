@@ -2,13 +2,15 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="clr-namespace:InterlinedList.ViewModels"
+             xmlns:models="clr-namespace:InterlinedList.Models"
              xmlns:local="clr-namespace:InterlinedList.Views"
              Background="{DynamicResource AppBgBrush}">
 
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
-        <local:InverseNullToVisibilityConverter x:Key="InverseNullToVisibility"/>
+        <local:InverseBooleanToVisibilityConverter x:Key="InverseBoolToVisibility"/>
         <local:NullOrEmptyToVisibilityConverter x:Key="NullOrEmptyToVisibility"/>
+        <local:DmFolderEqualsConverter x:Key="FolderEquals"/>
 
         <!-- Primary green button (matches FeedView) -->
         <Style x:Key="PrimaryBtnStyle" TargetType="Button">
@@ -68,6 +70,62 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <!-- A clickable list row (conversation / recipient / folder message) -->
+        <Style x:Key="RailRowBtnStyle" TargetType="Button">
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Margin" Value="0,0,0,2"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Row"
+                                Background="Transparent"
+                                CornerRadius="4"
+                                Padding="8,6">
+                            <ContentPresenter/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Row" Property="Background"
+                                        Value="{DynamicResource Surface3Brush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Inbox / Sent / Deleted tab. One Style for all three: the DataTrigger
+             compares the VM's SelectedFolder against this tab's own folder name
+             (ConverterParameter) and lights up the underline + label. -->
+        <Style x:Key="FolderTabStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Padding" Value="12,8"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bg" Background="{TemplateBinding Background}" CornerRadius="3">
+                            <Border BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="0,0,0,2"
+                                    Padding="{TemplateBinding Padding}">
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="Background"
+                                        Value="{DynamicResource Surface3Brush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </UserControl.Resources>
 
     <Grid>
@@ -83,33 +141,32 @@
                 BorderBrush="{DynamicResource BorderBrush}"
                 BorderThickness="0,0,0,1"
                 Padding="20,12">
-            <Grid>
-                <TextBlock Text="Direct Messages"
+            <DockPanel LastChildFill="False">
+                <TextBlock DockPanel.Dock="Left"
+                           Text="Direct Messages"
                            FontSize="17" FontWeight="SemiBold"
                            Foreground="{DynamicResource TextBrush}"
                            VerticalAlignment="Center"/>
-                <TextBlock Text="Loading…"
-                           HorizontalAlignment="Right"
+                <Button DockPanel.Dock="Right"
+                        Content="Refresh"
+                        Command="{Binding RefreshCommand}"
+                        Style="{StaticResource CardActionBtnStyle}"
+                        VerticalAlignment="Center"/>
+                <TextBlock DockPanel.Dock="Right"
+                           Text="Loading…"
                            FontSize="12"
+                           Margin="0,0,10,0"
+                           VerticalAlignment="Center"
                            Foreground="{DynamicResource TextMutedBrush}"
                            Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibility}}"/>
-            </Grid>
+            </DockPanel>
         </Border>
 
         <!-- Error banner -->
         <Border Grid.Row="1"
                 Background="#1AE81123"
-                Padding="20,8">
-            <Border.Style>
-                <Style TargetType="Border">
-                    <Setter Property="Visibility" Value="Visible"/>
-                    <Style.Triggers>
-                        <DataTrigger Binding="{Binding ErrorMessage}" Value="{x:Null}">
-                            <Setter Property="Visibility" Value="Collapsed"/>
-                        </DataTrigger>
-                    </Style.Triggers>
-                </Style>
-            </Border.Style>
+                Padding="20,8"
+                Visibility="{Binding ErrorMessage, Converter={StaticResource NullOrEmptyToVisibility}}">
             <TextBlock Text="{Binding ErrorMessage}"
                        FontSize="12"
                        Foreground="#FFE81123"
@@ -119,84 +176,462 @@
         <!-- Two-column body -->
         <Grid Grid.Row="2">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="240"/>
+                <ColumnDefinition Width="260"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
-            <!-- LEFT: recipient list -->
+            <!-- ══ LEFT: the conversation list (default view) ══════════════════
+                 GET /api/dm/conversations — one row per conversation, newest
+                 activity first. "New message" swaps in GET /api/dm/recipients,
+                 which is only the picker for starting a NEW conversation. -->
             <Border Grid.Column="0"
                     Background="{DynamicResource Surface2Brush}"
                     BorderBrush="{DynamicResource BorderBrush}"
                     BorderThickness="0,0,1,0">
-                <ScrollViewer VerticalScrollBarVisibility="Auto"
-                              HorizontalScrollBarVisibility="Disabled"
-                              Padding="8,8">
-                    <ItemsControl ItemsSource="{Binding Recipients}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <Button Margin="0,0,0,2"
-                                        HorizontalContentAlignment="Stretch"
-                                        Cursor="Hand"
-                                        Command="{Binding DataContext.SelectRecipientCommand,
-                                                  RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                        CommandParameter="{Binding}">
-                                    <Button.Template>
-                                        <ControlTemplate TargetType="Button">
-                                            <Border x:Name="Row"
-                                                    Background="Transparent"
-                                                    CornerRadius="4"
-                                                    Padding="8,6">
-                                                <ContentPresenter/>
-                                            </Border>
-                                            <ControlTemplate.Triggers>
-                                                <Trigger Property="IsMouseOver" Value="True">
-                                                    <Setter TargetName="Row" Property="Background"
-                                                            Value="{DynamicResource Surface3Brush}"/>
-                                                </Trigger>
-                                            </ControlTemplate.Triggers>
-                                        </ControlTemplate>
-                                    </Button.Template>
-                                    <DockPanel>
-                                        <Border DockPanel.Dock="Left"
-                                                Width="24" Height="24"
-                                                CornerRadius="999"
-                                                ClipToBounds="True"
-                                                Background="{DynamicResource Surface3Brush}"
-                                                Margin="0,0,8,0"
-                                                VerticalAlignment="Center">
-                                            <Image Source="{Binding Avatar}" Stretch="UniformToFill"/>
-                                        </Border>
-                                        <StackPanel VerticalAlignment="Center">
-                                            <TextBlock Text="{Binding DisplayNameOrUsername}"
-                                                       FontSize="12" FontWeight="SemiBold"
-                                                       Foreground="{DynamicResource TextBrush}"
-                                                       TextTrimming="CharacterEllipsis"/>
-                                            <TextBlock Text="{Binding Handle}"
-                                                       FontSize="11"
-                                                       Foreground="{DynamicResource TextMutedBrush}"
-                                                       TextTrimming="CharacterEllipsis"/>
-                                        </StackPanel>
-                                    </DockPanel>
-                                </Button>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </ScrollViewer>
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>  <!-- Rail header -->
+                        <RowDefinition Height="*"/>     <!-- List -->
+                        <RowDefinition Height="Auto"/>  <!-- Load more -->
+                    </Grid.RowDefinitions>
+
+                    <!-- Rail header -->
+                    <Border Grid.Row="0"
+                            BorderBrush="{DynamicResource BorderBrush}"
+                            BorderThickness="0,0,0,1"
+                            Padding="12,10">
+                        <DockPanel LastChildFill="False">
+                            <TextBlock DockPanel.Dock="Left"
+                                       Text="Conversations"
+                                       FontSize="11" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextMutedBrush}"
+                                       VerticalAlignment="Center"
+                                       Visibility="{Binding IsPickingRecipient, Converter={StaticResource InverseBoolToVisibility}}"/>
+                            <TextBlock DockPanel.Dock="Left"
+                                       Text="New message"
+                                       FontSize="11" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextMutedBrush}"
+                                       VerticalAlignment="Center"
+                                       Visibility="{Binding IsPickingRecipient, Converter={StaticResource BoolToVisibility}}"/>
+                            <Button DockPanel.Dock="Right"
+                                    Content="New message"
+                                    Command="{Binding ToggleRecipientPickerCommand}"
+                                    Style="{StaticResource CardActionBtnStyle}"
+                                    VerticalAlignment="Center"
+                                    Visibility="{Binding IsPickingRecipient, Converter={StaticResource InverseBoolToVisibility}}"/>
+                            <Button DockPanel.Dock="Right"
+                                    Content="Cancel"
+                                    Command="{Binding ToggleRecipientPickerCommand}"
+                                    Style="{StaticResource CardActionBtnStyle}"
+                                    VerticalAlignment="Center"
+                                    Visibility="{Binding IsPickingRecipient, Converter={StaticResource BoolToVisibility}}"/>
+                        </DockPanel>
+                    </Border>
+
+                    <ScrollViewer Grid.Row="1"
+                                  VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled"
+                                  Padding="8,8">
+                        <StackPanel>
+                            <!-- Conversation list -->
+                            <StackPanel Visibility="{Binding IsPickingRecipient, Converter={StaticResource InverseBoolToVisibility}}">
+                                <ItemsControl ItemsSource="{Binding Conversations}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="{x:Type vm:DmConversationViewModel}">
+                                            <Button Style="{StaticResource RailRowBtnStyle}"
+                                                    IsEnabled="{Binding CanOpen}"
+                                                    Command="{Binding DataContext.OpenConversationCommand,
+                                                              RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                    CommandParameter="{Binding}">
+                                                <DockPanel>
+                                                    <Border DockPanel.Dock="Left"
+                                                            Width="28" Height="28"
+                                                            CornerRadius="999"
+                                                            ClipToBounds="True"
+                                                            Background="{DynamicResource Surface3Brush}"
+                                                            Margin="0,0,8,0"
+                                                            VerticalAlignment="Top">
+                                                        <Image Source="{Binding OtherAvatar}" Stretch="UniformToFill"/>
+                                                    </Border>
+                                                    <!-- Unread count badge -->
+                                                    <Border DockPanel.Dock="Right"
+                                                            Background="{DynamicResource AmberBrush}"
+                                                            CornerRadius="999"
+                                                            MinWidth="18" Height="18"
+                                                            Padding="5,0"
+                                                            Margin="6,0,0,0"
+                                                            VerticalAlignment="Top"
+                                                            Visibility="{Binding HasUnread, Converter={StaticResource BoolToVisibility}}">
+                                                        <TextBlock Text="{Binding UnreadLabel}"
+                                                                   FontFamily="JetBrains Mono, Consolas"
+                                                                   FontSize="10" FontWeight="SemiBold"
+                                                                   Foreground="{DynamicResource TealDeepBrush}"
+                                                                   HorizontalAlignment="Center"
+                                                                   VerticalAlignment="Center"/>
+                                                    </Border>
+                                                    <StackPanel>
+                                                        <DockPanel LastChildFill="False">
+                                                            <TextBlock DockPanel.Dock="Left"
+                                                                       Text="{Binding OtherDisplayName}"
+                                                                       FontSize="12" FontWeight="SemiBold"
+                                                                       Foreground="{DynamicResource TextBrush}"
+                                                                       TextTrimming="CharacterEllipsis"/>
+                                                        </DockPanel>
+                                                        <TextBlock Text="{Binding Preview}"
+                                                                   FontSize="11"
+                                                                   Foreground="{DynamicResource TextMutedBrush}"
+                                                                   TextTrimming="CharacterEllipsis"
+                                                                   Margin="0,1,0,0"/>
+                                                        <TextBlock Text="{Binding DateTimeFormatted}"
+                                                                   FontFamily="JetBrains Mono, Consolas"
+                                                                   FontSize="10"
+                                                                   Foreground="{DynamicResource TextMutedBrush}"
+                                                                   Margin="0,2,0,0"/>
+                                                    </StackPanel>
+                                                </DockPanel>
+                                            </Button>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <!-- Empty state: informative, not a blank panel -->
+                                <StackPanel Margin="8,16,8,8"
+                                            Visibility="{Binding ShowNoConversations, Converter={StaticResource BoolToVisibility}}">
+                                    <TextBlock Text="No conversations yet"
+                                               FontSize="12" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextBrush}"
+                                               TextWrapping="Wrap"/>
+                                    <TextBlock Text="You can only message people you follow each other. Use New message to start one."
+                                               FontSize="11"
+                                               Foreground="{DynamicResource TextMutedBrush}"
+                                               TextWrapping="Wrap"
+                                               Margin="0,4,0,0"
+                                               LineHeight="16"/>
+                                </StackPanel>
+                            </StackPanel>
+
+                            <!-- Recipient picker (mutual, approved followers) -->
+                            <StackPanel Visibility="{Binding IsPickingRecipient, Converter={StaticResource BoolToVisibility}}">
+                                <ItemsControl ItemsSource="{Binding Recipients}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="{x:Type models:DmRecipient}">
+                                            <Button Style="{StaticResource RailRowBtnStyle}"
+                                                    Command="{Binding DataContext.SelectRecipientCommand,
+                                                              RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                    CommandParameter="{Binding}">
+                                                <DockPanel>
+                                                    <Border DockPanel.Dock="Left"
+                                                            Width="24" Height="24"
+                                                            CornerRadius="999"
+                                                            ClipToBounds="True"
+                                                            Background="{DynamicResource Surface3Brush}"
+                                                            Margin="0,0,8,0"
+                                                            VerticalAlignment="Center">
+                                                        <Image Source="{Binding Avatar}" Stretch="UniformToFill"/>
+                                                    </Border>
+                                                    <StackPanel VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding DisplayNameOrUsername}"
+                                                                   FontSize="12" FontWeight="SemiBold"
+                                                                   Foreground="{DynamicResource TextBrush}"
+                                                                   TextTrimming="CharacterEllipsis"/>
+                                                        <TextBlock Text="{Binding Handle}"
+                                                                   FontSize="11"
+                                                                   Foreground="{DynamicResource TextMutedBrush}"
+                                                                   TextTrimming="CharacterEllipsis"/>
+                                                    </StackPanel>
+                                                </DockPanel>
+                                            </Button>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <StackPanel Margin="8,16,8,8"
+                                            Visibility="{Binding ShowNoRecipients, Converter={StaticResource BoolToVisibility}}">
+                                    <TextBlock Text="Nobody to message yet"
+                                               FontSize="12" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextBrush}"
+                                               TextWrapping="Wrap"/>
+                                    <TextBlock Text="Only people who follow you back appear here. Follow someone and wait for them to follow you back."
+                                               FontSize="11"
+                                               Foreground="{DynamicResource TextMutedBrush}"
+                                               TextWrapping="Wrap"
+                                               Margin="0,4,0,0"
+                                               LineHeight="16"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <!-- nextCursor paging for the conversation list -->
+                    <Border Grid.Row="2"
+                            BorderBrush="{DynamicResource BorderBrush}"
+                            BorderThickness="0,1,0,0"
+                            Padding="8,6"
+                            Visibility="{Binding HasMoreConversations, Converter={StaticResource BoolToVisibility}}">
+                        <Button Content="Load more conversations"
+                                Command="{Binding LoadMoreConversationsCommand}"
+                                Style="{StaticResource CardActionBtnStyle}"
+                                HorizontalAlignment="Center"/>
+                    </Border>
+                </Grid>
             </Border>
 
-            <!-- RIGHT: selected conversation -->
+            <!-- ══ RIGHT: Inbox / Sent / Deleted tabs, then the folder list or
+                 the open conversation ════════════════════════════════════════ -->
             <Grid Grid.Column="1">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>  <!-- Tab strip -->
+                    <RowDefinition Height="*"/>     <!-- Folder list OR thread -->
+                </Grid.RowDefinitions>
 
-                <!-- Empty state (no recipient selected) -->
-                <TextBlock Text="Select a conversation"
-                           HorizontalAlignment="Center"
-                           VerticalAlignment="Center"
-                           FontSize="14"
-                           Foreground="{DynamicResource TextMutedBrush}"
-                           Visibility="{Binding SelectedRecipient, Converter={StaticResource InverseNullToVisibility}}"/>
+                <!-- Tab strip. GET /api/dm?folder=inbox|sent|deleted -->
+                <Border Grid.Row="0"
+                        Background="{DynamicResource SurfaceBrush}"
+                        BorderBrush="{DynamicResource BorderBrush}"
+                        BorderThickness="0,0,0,1"
+                        Padding="12,0">
+                    <StackPanel Orientation="Horizontal">
+                        <Button Content="Inbox"
+                                Command="{Binding SelectFolderCommand}"
+                                CommandParameter="{x:Static models:DmFolder.Inbox}">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource FolderTabStyle}">
+                                    <Style.Triggers>
+                                        <DataTrigger Value="True"
+                                                     Binding="{Binding SelectedFolder,
+                                                               Converter={StaticResource FolderEquals},
+                                                               ConverterParameter=Inbox}">
+                                            <Setter Property="BorderBrush" Value="{DynamicResource PrimaryBrush}"/>
+                                            <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+                                            <Setter Property="FontWeight" Value="SemiBold"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                        <Button Content="Sent"
+                                Command="{Binding SelectFolderCommand}"
+                                CommandParameter="{x:Static models:DmFolder.Sent}">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource FolderTabStyle}">
+                                    <Style.Triggers>
+                                        <DataTrigger Value="True"
+                                                     Binding="{Binding SelectedFolder,
+                                                               Converter={StaticResource FolderEquals},
+                                                               ConverterParameter=Sent}">
+                                            <Setter Property="BorderBrush" Value="{DynamicResource PrimaryBrush}"/>
+                                            <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+                                            <Setter Property="FontWeight" Value="SemiBold"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                        <Button Content="Deleted"
+                                Command="{Binding SelectFolderCommand}"
+                                CommandParameter="{x:Static models:DmFolder.Deleted}">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource FolderTabStyle}">
+                                    <Style.Triggers>
+                                        <DataTrigger Value="True"
+                                                     Binding="{Binding SelectedFolder,
+                                                               Converter={StaticResource FolderEquals},
+                                                               ConverterParameter=Deleted}">
+                                            <Setter Property="BorderBrush" Value="{DynamicResource PrimaryBrush}"/>
+                                            <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+                                            <Setter Property="FontWeight" Value="SemiBold"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                    </StackPanel>
+                </Border>
 
-                <!-- Conversation -->
-                <Grid Visibility="{Binding HasSelection, Converter={StaticResource BoolToVisibility}}">
+                <!-- ── Folder list (shown when no conversation is open) ────── -->
+                <Grid Grid.Row="1"
+                      Visibility="{Binding ShowFolderList, Converter={StaticResource BoolToVisibility}}">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <ScrollViewer Grid.Row="0"
+                                  VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled"
+                                  Padding="16,12">
+                        <StackPanel>
+                            <ItemsControl ItemsSource="{Binding FolderItems}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:DmFolderItemViewModel}">
+                                        <Border Background="{DynamicResource SurfaceBrush}"
+                                                BorderBrush="{DynamicResource BorderBrush}"
+                                                BorderThickness="1"
+                                                CornerRadius="4"
+                                                Margin="0,0,0,8">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="4"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+
+                                                <!-- 4px left edge: amber while unread, teal otherwise -->
+                                                <Border Grid.Column="0" CornerRadius="4,0,0,4">
+                                                    <Border.Style>
+                                                        <Style TargetType="Border">
+                                                            <Setter Property="Background" Value="{DynamicResource TealBrush}"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsUnread}" Value="True">
+                                                                    <Setter Property="Background" Value="{DynamicResource AmberBrush}"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Border.Style>
+                                                </Border>
+
+                                                <Grid Grid.Column="1" Margin="12,10">
+                                                    <Grid.RowDefinitions>
+                                                        <RowDefinition Height="Auto"/>
+                                                        <RowDefinition Height="Auto"/>
+                                                        <RowDefinition Height="Auto"/>
+                                                    </Grid.RowDefinitions>
+
+                                                    <!-- Participant + actions -->
+                                                    <DockPanel Grid.Row="0" LastChildFill="False">
+                                                        <Border DockPanel.Dock="Left"
+                                                                Width="24" Height="24"
+                                                                CornerRadius="999"
+                                                                ClipToBounds="True"
+                                                                Background="{DynamicResource Surface3Brush}"
+                                                                Margin="0,0,8,0"
+                                                                VerticalAlignment="Center">
+                                                            <Image Source="{Binding OtherAvatar}" Stretch="UniformToFill"/>
+                                                        </Border>
+                                                        <TextBlock DockPanel.Dock="Left"
+                                                                   Text="{Binding OtherDisplayName}"
+                                                                   FontSize="13" FontWeight="SemiBold"
+                                                                   Foreground="{DynamicResource TextBrush}"
+                                                                   VerticalAlignment="Center"/>
+                                                        <TextBlock DockPanel.Dock="Left"
+                                                                   Text="{Binding OtherHandle}"
+                                                                   FontSize="11"
+                                                                   Margin="6,0,0,0"
+                                                                   Foreground="{DynamicResource TextMutedBrush}"
+                                                                   VerticalAlignment="Center"/>
+                                                        <!-- Unread pill -->
+                                                        <Border DockPanel.Dock="Left"
+                                                                Background="{DynamicResource AmberBrush}"
+                                                                CornerRadius="3"
+                                                                Padding="5,1"
+                                                                Margin="8,0,0,0"
+                                                                VerticalAlignment="Center"
+                                                                Visibility="{Binding IsUnread, Converter={StaticResource BoolToVisibility}}">
+                                                            <TextBlock Text="Unread"
+                                                                       FontSize="10" FontWeight="SemiBold"
+                                                                       Foreground="{DynamicResource TealDeepBrush}"/>
+                                                        </Border>
+
+                                                        <!-- Restore (Deleted tab) -->
+                                                        <Button DockPanel.Dock="Right"
+                                                                Content="Restore"
+                                                                Command="{Binding DataContext.RestoreFolderItemCommand,
+                                                                          RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                CommandParameter="{Binding}"
+                                                                Style="{StaticResource CardActionBtnStyle}"
+                                                                VerticalAlignment="Center"
+                                                                Visibility="{Binding DataContext.IsDeletedFolder,
+                                                                             RelativeSource={RelativeSource AncestorType=UserControl},
+                                                                             Converter={StaticResource BoolToVisibility}}"/>
+                                                        <!-- Delete (Inbox / Sent tabs) -->
+                                                        <Button DockPanel.Dock="Right"
+                                                                Content="Delete"
+                                                                Command="{Binding DataContext.TrashFolderItemCommand,
+                                                                          RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                CommandParameter="{Binding}"
+                                                                Style="{StaticResource CardActionBtnStyle}"
+                                                                VerticalAlignment="Center"
+                                                                Visibility="{Binding DataContext.IsDeletedFolder,
+                                                                             RelativeSource={RelativeSource AncestorType=UserControl},
+                                                                             Converter={StaticResource InverseBoolToVisibility}}"/>
+                                                        <Button DockPanel.Dock="Right"
+                                                                Content="Open"
+                                                                Command="{Binding DataContext.OpenFolderItemCommand,
+                                                                          RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                CommandParameter="{Binding}"
+                                                                Style="{StaticResource CardActionBtnStyle}"
+                                                                VerticalAlignment="Center"/>
+                                                    </DockPanel>
+
+                                                    <!-- Preview (API-supplied, markdown-stripped) -->
+                                                    <TextBlock Grid.Row="1"
+                                                               Text="{Binding Preview}"
+                                                               FontSize="12"
+                                                               Foreground="{DynamicResource TextBodyBrush}"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               Margin="0,6,0,0"/>
+
+                                                    <DockPanel Grid.Row="2" LastChildFill="False" Margin="0,6,0,0">
+                                                        <TextBlock DockPanel.Dock="Left"
+                                                                   Text="{Binding DateTimeFormatted}"
+                                                                   FontFamily="JetBrains Mono, Consolas"
+                                                                   FontSize="10"
+                                                                   Foreground="{DynamicResource TextMutedBrush}"
+                                                                   VerticalAlignment="Center"/>
+                                                        <TextBlock DockPanel.Dock="Left"
+                                                                   Text="{Binding ImageCountLabel}"
+                                                                   FontSize="10"
+                                                                   Margin="10,0,0,0"
+                                                                   Foreground="{DynamicResource TextMutedBrush}"
+                                                                   VerticalAlignment="Center"
+                                                                   Visibility="{Binding HasImages, Converter={StaticResource BoolToVisibility}}"/>
+                                                    </DockPanel>
+                                                </Grid>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <!-- Per-folder empty state -->
+                            <StackPanel Margin="0,24,0,0"
+                                        MaxWidth="440"
+                                        HorizontalAlignment="Left"
+                                        Visibility="{Binding ShowEmptyFolder, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Text="{Binding FolderLabel}"
+                                           FontSize="14" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextBrush}"/>
+                                <TextBlock Text="{Binding FolderEmptyStateText}"
+                                           FontSize="12"
+                                           Foreground="{DynamicResource TextMutedBrush}"
+                                           TextWrapping="Wrap"
+                                           LineHeight="18"
+                                           Margin="0,6,0,0"/>
+                                <TextBlock Text="Deleting a message only removes your own copy — the other person keeps theirs and can never tell."
+                                           FontSize="11"
+                                           Foreground="{DynamicResource TextMutedBrush}"
+                                           TextWrapping="Wrap"
+                                           LineHeight="16"
+                                           Margin="0,8,0,0"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <!-- nextCursor paging for the folder list -->
+                    <Border Grid.Row="1"
+                            BorderBrush="{DynamicResource BorderBrush}"
+                            BorderThickness="0,1,0,0"
+                            Padding="16,6"
+                            Visibility="{Binding HasMoreFolderItems, Converter={StaticResource BoolToVisibility}}">
+                        <Button Content="Load older messages"
+                                Command="{Binding LoadMoreFolderItemsCommand}"
+                                Style="{StaticResource CardActionBtnStyle}"
+                                HorizontalAlignment="Center"/>
+                    </Border>
+                </Grid>
+
+                <!-- ── Open conversation ──────────────────────────────────────── -->
+                <Grid Grid.Row="1"
+                      Visibility="{Binding HasSelection, Converter={StaticResource BoolToVisibility}}">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>  <!-- Conversation header -->
                         <RowDefinition Height="*"/>     <!-- Messages -->
@@ -209,7 +644,13 @@
                             BorderBrush="{DynamicResource BorderBrush}"
                             BorderThickness="0,0,0,1"
                             Padding="16,10">
-                        <DockPanel DataContext="{Binding SelectedRecipient}">
+                        <DockPanel LastChildFill="False">
+                            <Button DockPanel.Dock="Left"
+                                    Content="{Binding BackToFolderLabel}"
+                                    Command="{Binding CloseThreadCommand}"
+                                    Style="{StaticResource CardActionBtnStyle}"
+                                    Margin="0,0,12,0"
+                                    VerticalAlignment="Center"/>
                             <Border DockPanel.Dock="Left"
                                     Width="28" Height="28"
                                     CornerRadius="999"
@@ -217,13 +658,13 @@
                                     Background="{DynamicResource Surface3Brush}"
                                     Margin="0,0,10,0"
                                     VerticalAlignment="Center">
-                                <Image Source="{Binding Avatar}" Stretch="UniformToFill"/>
+                                <Image Source="{Binding SelectedRecipient.Avatar}" Stretch="UniformToFill"/>
                             </Border>
-                            <StackPanel VerticalAlignment="Center">
-                                <TextBlock Text="{Binding DisplayNameOrUsername}"
+                            <StackPanel DockPanel.Dock="Left" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding SelectedRecipient.DisplayNameOrUsername}"
                                            FontSize="14" FontWeight="SemiBold"
                                            Foreground="{DynamicResource TextBrush}"/>
-                                <TextBlock Text="{Binding Handle}"
+                                <TextBlock Text="{Binding SelectedRecipient.Handle}"
                                            FontSize="11"
                                            Foreground="{DynamicResource TextMutedBrush}"/>
                             </StackPanel>
@@ -235,140 +676,161 @@
                                   VerticalScrollBarVisibility="Auto"
                                   HorizontalScrollBarVisibility="Disabled"
                                   Padding="16,12">
-                        <ItemsControl ItemsSource="{Binding Messages}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate DataType="{x:Type vm:DmMessageViewModel}">
-                                    <Grid Margin="0,0,0,8">
-                                        <!-- Others: left-aligned, SurfaceBrush -->
-                                        <Border HorizontalAlignment="Left"
-                                                MaxWidth="420"
-                                                Background="{DynamicResource SurfaceBrush}"
-                                                BorderBrush="{DynamicResource BorderBrush}"
-                                                BorderThickness="1"
-                                                CornerRadius="4"
-                                                Padding="10,8">
-                                            <Border.Style>
-                                                <Style TargetType="Border">
-                                                    <Setter Property="Visibility" Value="Visible"/>
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding IsMine}" Value="True">
-                                                            <Setter Property="Visibility" Value="Collapsed"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </Border.Style>
-                                            <StackPanel>
-                                                <TextBlock Text="{Binding Body}"
-                                                           FontSize="13"
-                                                           Foreground="{DynamicResource TextBodyBrush}"
-                                                           TextWrapping="Wrap"
-                                                           LineHeight="20"/>
-                                                <!-- Attached images -->
-                                                <ItemsControl ItemsSource="{Binding ImageUrls}" Margin="0,6,0,0"
-                                                              Visibility="{Binding HasImages, Converter={StaticResource BoolToVisibility}}">
-                                                    <ItemsControl.ItemTemplate>
-                                                        <DataTemplate>
-                                                            <Border Margin="0,0,0,6" CornerRadius="4"
-                                                                    ClipToBounds="True" HorizontalAlignment="Left">
-                                                                <Image Source="{Binding}" Stretch="Uniform" MaxHeight="240"/>
-                                                            </Border>
-                                                        </DataTemplate>
-                                                    </ItemsControl.ItemTemplate>
-                                                </ItemsControl>
-                                                <TextBlock Text="{Binding TimeFormatted}"
-                                                           FontFamily="JetBrains Mono, Consolas"
-                                                           FontSize="10"
-                                                           Foreground="{DynamicResource TextMutedBrush}"
-                                                           Margin="0,4,0,0"
-                                                           HorizontalAlignment="Left"/>
-                                            </StackPanel>
-                                        </Border>
-
-                                        <!-- Mine: right-aligned, teal-ish (Surface3Brush + teal accent) -->
-                                        <Border HorizontalAlignment="Right"
-                                                MaxWidth="420"
-                                                Background="{DynamicResource Surface3Brush}"
-                                                BorderBrush="{StaticResource TealBrush}"
-                                                BorderThickness="0,0,3,0"
-                                                CornerRadius="4"
-                                                Padding="10,8"
-                                                Visibility="Collapsed">
-                                            <Border.Style>
-                                                <Style TargetType="Border">
-                                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding IsMine}" Value="True">
-                                                            <Setter Property="Visibility" Value="Visible"/>
-                                                        </DataTrigger>
-                                                        <!-- Dim once soft-deleted (trashed) -->
-                                                        <DataTrigger Binding="{Binding IsTrashed}" Value="True">
-                                                            <Setter Property="Opacity" Value="0.5"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </Border.Style>
-                                            <StackPanel>
-                                                <TextBlock Text="Deleted"
-                                                           FontSize="10" FontWeight="SemiBold"
-                                                           Foreground="{DynamicResource TextMutedBrush}"
-                                                           Margin="0,0,0,4"
-                                                           HorizontalAlignment="Right"
-                                                           Visibility="{Binding IsTrashed, Converter={StaticResource BoolToVisibility}}"/>
-                                                <TextBlock Text="{Binding Body}"
-                                                           FontSize="13"
-                                                           Foreground="{DynamicResource TextBodyBrush}"
-                                                           TextWrapping="Wrap"
-                                                           LineHeight="20"/>
-                                                <!-- Attached images -->
-                                                <ItemsControl ItemsSource="{Binding ImageUrls}" Margin="0,6,0,0"
-                                                              Visibility="{Binding HasImages, Converter={StaticResource BoolToVisibility}}">
-                                                    <ItemsControl.ItemTemplate>
-                                                        <DataTemplate>
-                                                            <Border Margin="0,0,0,6" CornerRadius="4"
-                                                                    ClipToBounds="True" HorizontalAlignment="Right">
-                                                                <Image Source="{Binding}" Stretch="Uniform" MaxHeight="240"/>
-                                                            </Border>
-                                                        </DataTemplate>
-                                                    </ItemsControl.ItemTemplate>
-                                                </ItemsControl>
-                                                <DockPanel Margin="0,4,0,0" LastChildFill="False">
-                                                    <TextBlock DockPanel.Dock="Left"
-                                                               Text="{Binding TimeFormatted}"
+                        <StackPanel>
+                            <ItemsControl ItemsSource="{Binding Messages}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:DmMessageViewModel}">
+                                        <Grid Margin="0,0,0,8">
+                                            <!-- Others: left-aligned, SurfaceBrush -->
+                                            <Border HorizontalAlignment="Left"
+                                                    MaxWidth="420"
+                                                    Background="{DynamicResource SurfaceBrush}"
+                                                    BorderBrush="{DynamicResource BorderBrush}"
+                                                    BorderThickness="1"
+                                                    CornerRadius="4"
+                                                    Padding="10,8">
+                                                <Border.Style>
+                                                    <Style TargetType="Border">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsMine}" Value="True">
+                                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Border.Style>
+                                                <StackPanel>
+                                                    <TextBlock Text="{Binding Body}"
+                                                               FontSize="13"
+                                                               Foreground="{DynamicResource TextBodyBrush}"
+                                                               TextWrapping="Wrap"
+                                                               LineHeight="20"/>
+                                                    <!-- Attached images -->
+                                                    <ItemsControl ItemsSource="{Binding ImageUrls}" Margin="0,6,0,0"
+                                                                  Visibility="{Binding HasImages, Converter={StaticResource BoolToVisibility}}">
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate>
+                                                                <Border Margin="0,0,0,6" CornerRadius="4"
+                                                                        ClipToBounds="True" HorizontalAlignment="Left">
+                                                                    <Image Source="{Binding}" Stretch="Uniform" MaxHeight="240"/>
+                                                                </Border>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+                                                    <TextBlock Text="{Binding TimeFormatted}"
                                                                FontFamily="JetBrains Mono, Consolas"
                                                                FontSize="10"
                                                                Foreground="{DynamicResource TextMutedBrush}"
-                                                               VerticalAlignment="Center"/>
-                                                    <!-- Delete (when not trashed) -->
-                                                    <Button DockPanel.Dock="Right"
-                                                            Content="Delete"
-                                                            Command="{Binding DataContext.TrashMessageCommand,
-                                                                      RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                            CommandParameter="{Binding}">
-                                                        <Button.Style>
-                                                            <Style TargetType="Button" BasedOn="{StaticResource CardActionBtnStyle}">
-                                                                <Style.Triggers>
-                                                                    <DataTrigger Binding="{Binding IsTrashed}" Value="True">
-                                                                        <Setter Property="Visibility" Value="Collapsed"/>
-                                                                    </DataTrigger>
-                                                                </Style.Triggers>
-                                                            </Style>
-                                                        </Button.Style>
-                                                    </Button>
-                                                    <!-- Restore (when trashed) -->
-                                                    <Button DockPanel.Dock="Right"
-                                                            Content="Restore"
-                                                            Command="{Binding DataContext.RestoreMessageCommand,
-                                                                      RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                            CommandParameter="{Binding}"
-                                                            Style="{StaticResource CardActionBtnStyle}"
-                                                            Visibility="{Binding IsTrashed, Converter={StaticResource BoolToVisibility}}"/>
-                                                </DockPanel>
-                                            </StackPanel>
-                                        </Border>
-                                    </Grid>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
+                                                               Margin="0,4,0,0"
+                                                               HorizontalAlignment="Left"/>
+                                                </StackPanel>
+                                            </Border>
+
+                                            <!-- Mine: right-aligned, teal-ish (Surface3Brush + teal accent) -->
+                                            <Border HorizontalAlignment="Right"
+                                                    MaxWidth="420"
+                                                    Background="{DynamicResource Surface3Brush}"
+                                                    BorderBrush="{StaticResource TealBrush}"
+                                                    BorderThickness="0,0,3,0"
+                                                    CornerRadius="4"
+                                                    Padding="10,8"
+                                                    Visibility="Collapsed">
+                                                <Border.Style>
+                                                    <Style TargetType="Border">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsMine}" Value="True">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                            <!-- Dim once soft-deleted (trashed) -->
+                                                            <DataTrigger Binding="{Binding IsTrashed}" Value="True">
+                                                                <Setter Property="Opacity" Value="0.5"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Border.Style>
+                                                <StackPanel>
+                                                    <TextBlock Text="Deleted"
+                                                               FontSize="10" FontWeight="SemiBold"
+                                                               Foreground="{DynamicResource TextMutedBrush}"
+                                                               Margin="0,0,0,4"
+                                                               HorizontalAlignment="Right"
+                                                               Visibility="{Binding IsTrashed, Converter={StaticResource BoolToVisibility}}"/>
+                                                    <TextBlock Text="{Binding Body}"
+                                                               FontSize="13"
+                                                               Foreground="{DynamicResource TextBodyBrush}"
+                                                               TextWrapping="Wrap"
+                                                               LineHeight="20"/>
+                                                    <!-- Attached images -->
+                                                    <ItemsControl ItemsSource="{Binding ImageUrls}" Margin="0,6,0,0"
+                                                                  Visibility="{Binding HasImages, Converter={StaticResource BoolToVisibility}}">
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate>
+                                                                <Border Margin="0,0,0,6" CornerRadius="4"
+                                                                        ClipToBounds="True" HorizontalAlignment="Right">
+                                                                    <Image Source="{Binding}" Stretch="Uniform" MaxHeight="240"/>
+                                                                </Border>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+                                                    <DockPanel Margin="0,4,0,0" LastChildFill="False">
+                                                        <TextBlock DockPanel.Dock="Left"
+                                                                   Text="{Binding TimeFormatted}"
+                                                                   FontFamily="JetBrains Mono, Consolas"
+                                                                   FontSize="10"
+                                                                   Foreground="{DynamicResource TextMutedBrush}"
+                                                                   VerticalAlignment="Center"/>
+                                                        <!-- Delete (own copy only) -->
+                                                        <Button DockPanel.Dock="Right"
+                                                                Content="Delete"
+                                                                Command="{Binding DataContext.TrashMessageCommand,
+                                                                          RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                CommandParameter="{Binding}">
+                                                            <Button.Style>
+                                                                <Style TargetType="Button" BasedOn="{StaticResource CardActionBtnStyle}">
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding IsTrashed}" Value="True">
+                                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </Button.Style>
+                                                        </Button>
+                                                        <!-- Restore lives in the Deleted tab; this only appears if the
+                                                             server ever starts exposing per-side delete timestamps. -->
+                                                        <Button DockPanel.Dock="Right"
+                                                                Content="Restore"
+                                                                Command="{Binding DataContext.RestoreMessageCommand,
+                                                                          RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                CommandParameter="{Binding}"
+                                                                Style="{StaticResource CardActionBtnStyle}"
+                                                                Visibility="{Binding IsTrashed, Converter={StaticResource BoolToVisibility}}"/>
+                                                    </DockPanel>
+                                                </StackPanel>
+                                            </Border>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <!-- Empty thread -->
+                            <TextBlock Text="No messages in this conversation yet. Say hello."
+                                       FontSize="12"
+                                       Foreground="{DynamicResource TextMutedBrush}"
+                                       Margin="0,16,0,0"
+                                       TextWrapping="Wrap">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Messages.Count}" Value="0">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </StackPanel>
                     </ScrollViewer>
 
                     <!-- Compose -->

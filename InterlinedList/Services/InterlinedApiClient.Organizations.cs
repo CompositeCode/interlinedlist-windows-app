@@ -71,6 +71,52 @@ public sealed partial class InterlinedApiClient
     public Task UpdateOrgMemberRoleAsync(string orgId, string userId, string role, CancellationToken ct = default)
         => SendVoidAsync(HttpMethod.Put, $"api/organizations/{orgId}/members/{userId}", new { role }, ct);
 
+    /// <summary>
+    /// Search for users to add as members of an organization.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The purpose-built, org-scoped counterpart to <c>GET /api/users/search</c>.
+    /// Prefer it for the add-member picker: it is the endpoint the product
+    /// intends for this, so it can scope candidates to the organization.
+    /// </para>
+    /// <para>
+    /// <b>Owner-only.</b> Verified live 2026-09-16 — calling it as a
+    /// non-owner member returns
+    /// <c>403 {"error":"Only organization owners can search for users to add",
+    /// "code":"forbidden"}</c>, with or without a <c>q</c>. Note that is
+    /// stricter than the rest of member management, which owners <i>and</i>
+    /// admins can do, so gate the UI on owner specifically.
+    /// </para>
+    /// <para>
+    /// The success envelope is <b>not</b> live-verified: the test account is
+    /// only a <c>member</c> of all three of its organizations, and verifying it
+    /// would mean creating an organization on shared test infrastructure, which
+    /// this repo deliberately avoids. It is therefore parsed leniently — the
+    /// same <c>{users:[…]}</c> / bare-array shapes the user-search endpoint
+    /// uses — rather than typed strictly against a guess.
+    /// </para>
+    /// </remarks>
+    public async Task<List<UserSearchResult>> SearchOrgCandidateUsersAsync(
+        string orgId, string query, CancellationToken ct = default)
+    {
+        var path = $"api/organizations/{orgId}/users?q={Uri.EscapeDataString(query)}";
+        var json = await GetElementAsync(path, ct);
+
+        // Lenient on purpose — see the remarks. Accept an envelope under either
+        // plausible key, or a bare array.
+        if (json.ValueKind == JsonValueKind.Array)
+            return json.Deserialize<List<UserSearchResult>>(JsonOptions) ?? [];
+
+        foreach (var key in (string[])["users", "results"])
+        {
+            if (json.TryGetProperty(key, out var arr) && arr.ValueKind == JsonValueKind.Array)
+                return arr.Deserialize<List<UserSearchResult>>(JsonOptions) ?? [];
+        }
+
+        return [];
+    }
+
     public Task RemoveOrgMemberAsync(string orgId, string userId, CancellationToken ct = default)
         => SendVoidAsync(HttpMethod.Delete, $"api/organizations/{orgId}/members/{userId}", null, ct);
 }
