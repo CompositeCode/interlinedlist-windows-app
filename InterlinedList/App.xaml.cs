@@ -59,7 +59,10 @@ public partial class App : Application
                 // so drop the session instead and let the login screen surface
                 // the server's own rejection when they try again (#50).
                 AppLog.Info("Restored session belongs to a closed account; discarding it and showing login.");
-                AppServices.Session.Logout();
+                // ClearLocalSession, not LogoutAsync: the account is closed, so
+                // there is no useful server call to make — and both call sites are
+                // synchronous. LogoutAsync is for a user-initiated sign-out.
+                AppServices.Session.ClearLocalSession();
                 ShowLoginWindow();
             }
             else if (restored)
@@ -133,7 +136,10 @@ public partial class App : Application
             if (IsAccountClosed())
             {
                 AppLog.Info("Sign-in produced a closed account; refusing to open the shell.");
-                AppServices.Session.Logout();
+                // ClearLocalSession, not LogoutAsync: the account is closed, so
+                // there is no useful server call to make — and both call sites are
+                // synchronous. LogoutAsync is for a user-initiated sign-out.
+                AppServices.Session.ClearLocalSession();
                 return;
             }
 
