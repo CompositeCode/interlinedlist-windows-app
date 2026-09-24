@@ -137,8 +137,13 @@ rather than silent:
 ## API integration
 
 The app talks to the real InterlinedList backend at `https://interlinedlist.com`
-(154-endpoint REST API, OpenAPI spec at `/api/openapi.json`) — there is no mock
-data layer. Auth is a long-lived bearer token from `POST /api/auth/sync-token`
+(OpenAPI spec at `/api/openapi.json` — **233 paths / 304 operations** as of
+2026-09-15, of which **259 are in scope** for a client once admin/cron/webhooks
+are excluded; the app implements **115**). There is no mock data layer.
+**The spec grows quickly** — it was 189 paths / 244 operations on 2026-08-01, so
+re-read it rather than trusting any count written here.
+
+Auth is a long-lived bearer token from `POST /api/auth/sync-token`
 (the same mechanism the `il-sync` CLI and other native clients use — no cookie
 jar), persisted DPAPI-encrypted via `CredentialStore`. The token is
 long-lived, so treat `%LocalAppData%\InterlinedList\session.dat` as a standing
@@ -156,36 +161,98 @@ notifications tray with **mark-one-read / delete-one / mark-all**; **Direct
 Messages** (recipient list + thread + send); **People** (profile lookup,
 follow/unfollow, follow-request approve/reject, a user's messages,
 **block/mute/report**); **Lists** (browse/create/delete, freeform JSON data
-rows with **row edit + delete** — no schema/column editor, see below);
+rows with **row edit + delete** — no schema/column editor yet, see below);
 **Documents** (root docs, templates, create/edit/delete + **folder CRUD /
 new-doc-in-folder**); **Organizations** (browse + create + **full member
 management**: add via search, change role, remove, edit/delete org);
 **Settings** (profile edit, avatar-from-URL, email change, notification
 preferences, blocked/muted management, **API-session list + revoke**, **CSV
 data export**); unified **Search**; and **Connected Accounts** (Bluesky/
-Mastodon/LinkedIn/Twitter linking + cross-post toggles). Still not built:
-Stripe billing UI, register/forgot-password, GitHub issue sync (endpoints work
-but the test account has no GitHub linked), per-list schema/column definitions,
-LinkedIn per-page posting targets, scheduled-post UI (the service supports
-`scheduledAt`), media *video* upload, list watchers/sharing, document sharing/
-collaborators, Materialize ("Create from…"), and account deletion UI (the
-service method exists, intentionally unsurfaced).
+Mastodon/LinkedIn/Twitter linking + cross-post toggles).
+
+**Not built — see the parity backlog (GitHub issues #8–#128, 19 epics).** The
+big ones are whole product pillars the app has nothing for:
+
+- **AI Writing Assistance** (`/api/ai/*`) — writing assist, message/article
+  series, Powered Templates, Powered Document. Subscriber-gated, bearer-OK.
+- **Application Settings & Devices** (`/api/user/app-settings/*`) — ten
+  endpoints built so native clients sync their own prefs across machines. This
+  app is the intended consumer.
+- **Tags** (`/api/tags/*`) — trending + prefix autocomplete, `tags` on posts.
+- **List schema / typed columns**, **"Create from…" (Materialize)**,
+  **GitHub-backed lists**, **list folders** (`/api/folders`, distinct from
+  document folders), **list saved views**, **email invites** for lists and
+  documents, **Push/Quote**, **link preview cards**, **message permalinks**,
+  **DM Inbox/Sent/Deleted**, and the **dashboard/widgets** surface.
+
+Also missing and cheap: `Models/CurrentUser.cs` drops 14 preference fields
+`GET /api/user` returns (including `accountStatus`), so the app silently
+ignores preferences set on the web; `Models/Message.cs` drops 9 live fields;
+`Models/NotificationPreference.cs` omits the `email` channel the API returns.
 
 **Load-bearing constraints discovered by live-probing the API — don't
 "fix" these without re-verifying, they're not bugs in this app:**
 
-1. **A few endpoints only accept cookie-session auth, not the bearer
-   sync-token.** Re-probed live 2026-07-31 with the test account:
-   `GET /api/user/engagement` and `GET/PUT /api/user/dashboard-layout` return
-   `401` with a valid bearer token (Stripe billing + some `/api/auth/*` session
-   flows are the same shape). A native bearer-token client structurally can't
-   get a cookie session, so those are either browser-handoff (like OAuth) or
-   out of scope. **Correction to an earlier claim:** `GET
-   /api/organizations/{id}/members`, `GET /api/linkedin/targets`, and
-   `GET /api/linkedin/posting-targets` were *previously* documented here as
-   `401`-walled, but as of 2026-07-31 they return `200` with the bearer token —
-   member-management and LinkedIn per-page targeting **are** buildable now.
-   (Member *mutations* — POST/PUT/DELETE — still need live write-verification.)
+1. **⚠️ The auth model per endpoint drifts — always re-probe, never trust a
+   claim written here (including this one).** The spec's declared `security` is
+   **not authoritative**: `/api/user/engagement` and `/api/user/dashboard-layout`
+   both declare bearer-or-cookie, yet behaved as cookie-only on 2026-07-31 and
+   as bearer-OK on 2026-09-15. Two full rounds of corrections have now been
+   needed here, so treat the list below as a dated snapshot, not a rule.
+
+   **⚠️ `POST /api/auth/logout` does NOT invalidate a bearer sync-token.**
+   Probed live 2026-09-16 (#114): it returns `200 {"message":"Logged out
+   successfully","remaining":0}` — and returns exactly that **with no
+   `Authorization` header at all**. The spec agrees: `x-auth-type: "none"`,
+   `security: []`. After five logout calls the same token still returned `200`
+   from `GET /api/user`, and its row stayed in `GET /api/user/sessions` with a
+   freshly bumped `lastUsedAt`. `remaining` counts *cookie* sessions, always 0
+   for a native client.
+   The real revoke is `DELETE /api/user/sessions/{id}` (`204`, after which the
+   token 401s and its row disappears) — but exactly one row comes back
+   `isCurrent: true`, and deleting that one returns
+   `400 {"error":"cannot_revoke_current_session"}`. **So a native bearer client
+   structurally cannot invalidate its own token.** Destroying `session.dat` is
+   therefore sign-out's only real guarantee, which is why `ClearToken()`
+   overwrites before deleting. The stale-token pile on the test account is now
+   **1,283** (it was 502 on 2026-07-31) — a concrete consequence.
+
+   **Cookie-session-only, confirmed live 2026-09-15** (a native bearer-token
+   client structurally cannot get a cookie session, so these are browser-handoff
+   or out of scope): `GET /api/auth/accounts`, `POST /api/auth/switch`,
+   `POST /api/auth/remove-account`, `POST /api/auth/send-verification-email`,
+   `POST /api/stripe/create-checkout-session`,
+   `POST /api/stripe/create-portal-session`,
+   `/api/architecture-aggregates/*`, and all of `/api/admin/*`.
+
+   **Bearer-OK as of 2026-09-15, previously documented here as `401`-walled —
+   these corrections are the point:**
+   - `GET /api/user/engagement` → `200` (totals + a recent feed).
+   - `GET`/`PUT /api/user/dashboard-layout` → `200 {"layout":null}`; same for
+     `/api/user/front-wall-layout`.
+   - `GET /api/organizations/{id}/members`, `GET /api/linkedin/targets`,
+     `GET /api/linkedin/posting-targets` → `200` (corrected 2026-07-31).
+   - `GET /api/github/repos` and `/api/github/orgs` → `200 []`. The earlier
+     "every `/api/github/*` call returns 'GitHub account not linked'" claim was
+     wrong — the whole GitHub surface is buildable.
+     **But don't read those empty arrays as "nothing is linked."** The test
+     account *is* GitHub-linked (`GET /api/user/identities` shows provider
+     `github`, username `InterlinedListMessenger`) — the arrays are empty
+     because that GitHub account owns no repos and joins no orgs. So the
+     genuinely-unlinked response shape is **still unobserved**, and link state
+     must be read from `/api/user/identities` (consistent with constraint 2
+     below), never inferred from an empty collection.
+     Two more live facts worth having: `GET /api/github/repos` needs an
+     **`?org=`** to return anything (`?org=github` → 559 repos in one bare
+     array — the server walks GitHub's pages itself, so **no client paging**,
+     with an apparent 2000 cap), and `?org=<a *user* rather than an org>`
+     returns `404`. `GET /api/github/issues` without `?repo=owner/repo` and
+     without a `githubDefaultRepo` returns `400 "Repository required…"`.
+   - `/api/ai/*`, `/api/tags/*`, `/api/user/app-settings/*`, `/api/limits`,
+     `/api/link-metadata`, `/api/documents/tree`, `/api/folders`,
+     `/api/lists/{id}/schema|views|contributors|invites|watchers/me`,
+     `/api/lists/connections`, `/api/dm/conversations`, `/api/widgets/*` — all
+     `200` with the bearer token.
 2. **The per-provider `GET /api/auth/{provider}/status` endpoints are a red
    herring** — they report whether the *server* has that OAuth integration
    configured, not whether *this user* has linked it. The real per-user link
@@ -197,12 +264,40 @@ service method exists, intentionally unsurfaced).
 `RemoveIdentityAsync` don't parse their response bodies — some were
 deliberately never exercised live (creating an org, disconnecting a linked
 identity) to avoid mutating shared test infrastructure, so callers re-fetch
-from a `GET` afterward rather than trusting a typed write response. Lists'
-schema/column DSL (`PUT /api/lists/{id}/schema`) was only partially reverse
-engineered and is **not implemented** — data rows work fine schema-less
-(confirmed live), so that's the supported path. If you pick up any of this,
-verify the actual response shape against a real (test) account before typing
-it strictly, and prefer read-after-write over trusting an unverified envelope.
+from a `GET` afterward rather than trusting a typed write response. If you pick
+up any of this, verify the actual response shape against a real (test) account
+before typing it strictly, and prefer read-after-write over trusting an
+unverified envelope.
+
+**The two "API-blocked" items in this file are no longer blocked** — both are
+now fully published, and `/help/*` + `/help/api/*` are far richer than
+`/api/openapi.json`, whose `description` fields are mostly empty. **Read the
+help pages, not just the spec.**
+
+- **List schema / column DSL** — previously "only partially reverse engineered
+  and not implemented". Fully documented at `/help/api/lists-dsl`: a `schema`
+  object of `{name, description, fields[]}`; twelve field types (`text`,
+  `textarea`, `number`, `boolean`, `date`, `datetime`, `email`, `url`, `tel`,
+  `select`, `multiselect`, `priority`); `validation` rules (`min`, `max`,
+  `minLength`, `maxLength`, `pattern`, `step`); and single-condition
+  conditional visibility over ten operators. `GET /api/lists/{id}/schema`
+  returns `200 {"data":{...}}` with the bearer token.
+  **`PUT /api/lists/{id}/schema` takes two body shapes and they are not
+  equivalent:** a `schema` DSL object is a **destructive rebuild** (wipes and
+  recreates every column, and `schema.name` becomes the list's new title),
+  while a `properties` array is a **non-destructive** edit that preserves row
+  data. Don't ship one "Save schema" button. Schema-less rows do still work,
+  so that remains a valid fallback for lists that have no columns.
+- **Materialize ("Create from…")** — previously "a single opaque `source`
+  string". Fully documented at `/help/api/create-from`: `POST /api/materialize`
+  with `{target, source, listConfig?, docConfig?, messageConfig?}`, where
+  `target` is `list`/`doc`/`both`/`message` and `source.kind` is one of
+  `messages`/`lists`/`rows`/`document`/`docElements`. **The request sends
+  id-only references, never content** — the server re-fetches and authorizes
+  every id under the calling user, and does not trust client cell values or
+  body text. `target: "message"` deliberately **writes nothing** and returns a
+  draft (`{content, thread[], isThread, charLimit}`) to hand to the normal
+  composer, so that every posting gate stays in one place.
 
 Left nav maps to real views now: **Feed**, **Messages** (Direct Messages),
 **Lists**, **Documents**, **Organizations**, **People** (profiles + follow),
@@ -354,6 +449,32 @@ three real, non-obvious issues surfaced and are fixed in the current state
 3. `TargetPlatformVersion` in the `.wapproj` must match an SDK actually
    installed on the runner (see above) — it drifts as GitHub updates runner
    images, so a future image update could reintroduce this failure.
+4. **`InterlinedList.Sync.Core.csproj` needs `<RuntimeIdentifiers>win-x64</RuntimeIdentifiers>`
+   too** — it was the only project in the reference chain missing it, and the
+   MSIX nested publish failed with `NETSDK1047` ("Assets file … doesn't have a
+   target for 'net10.0/win-x64'"). Same root cause as item 2, and a platform-
+   neutral `TargetFramework` does **not** exempt a project from needing the RID
+   declared: the RID must be present at *restore* time, and passing `-r win-x64`
+   on the CLI is not enough.
+5. **A non-entry-point `ProjectReference` lands in a SUBFOLDER of the MSIX
+   payload, so `Package.appxmanifest` must say
+   `Executable="InterlinedList.Sync\InterlinedList.Sync.exe"`, not the bare
+   filename** (`APPX0703` otherwise). Desktop Bridge flattens only the
+   entry-point project (`EntryPointProjectUniqueName`) to the package root;
+   everything else is harvested under a folder named after the project:
+   ```
+   InterlinedList.exe      -> …\bin\x64\Release\InterlinedList\InterlinedList.exe
+   InterlinedList.Sync.exe -> …\bin\x64\Release\InterlinedList.Sync\InterlinedList.Sync.exe
+   ```
+   **This is the one place the two packaging tracks legitimately disagree:** the
+   MSI publishes both projects into the *same* folder and WiX globs it, so a
+   bare filename is correct there. Don't "tidy" the MSIX subdirectory away.
+
+**Both 4 and 5 were latent for six weeks.** The `InterlinedList.Sync*` projects
+existed only on a local `main` that had never been pushed, so **CI had never
+once built the MSIX half of the sync feature** — it was written, documented here
+as working, and never exercised. If you add a project, push it, and check that
+all three CI jobs actually ran against it.
 
 **Releases** — `.github/workflows/release.yml` triggers on a pushed `v*` tag
 (e.g. `git tag v1.0.0 && git push origin v1.0.0`). It runs the same

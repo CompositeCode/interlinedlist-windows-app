@@ -6,13 +6,36 @@ using InterlinedList.Models;
 namespace InterlinedList.Services;
 
 /// <summary>
-/// Personal markdown documents: root document list, flat folders (each embedding
-/// its direct documents), and templates. PATCH/from-template write responses
-/// weren't fully verified live, so those paths just check success and the
-/// caller re-fetches instead of trusting a parsed body.
+/// Personal markdown documents: the combined sidebar tree, root document list,
+/// flat folders (each embedding its direct documents), and templates.
+/// PATCH/from-template write responses weren't fully verified live, so those
+/// paths just check success and the caller re-fetches instead of trusting a
+/// parsed body.
 /// </summary>
 public sealed partial class InterlinedApiClient
 {
+    /// <summary>
+    /// The whole Documents sidebar in ONE request — folders (with their direct
+    /// documents embedded and <c>parentId</c> for nesting) plus the documents
+    /// that live outside any folder. Replaces the
+    /// <see cref="GetRootDocumentsAsync"/> + <see cref="GetDocumentFoldersAsync"/>
+    /// pair on the view's load path.
+    ///
+    /// NOT a strict superset of those two calls: its document nodes are a
+    /// lightweight projection with no <c>content</c>, so anything that needs a
+    /// document body follows up with <see cref="GetDocumentAsync"/>. Its folder
+    /// rows also drop <c>createdAt</c>/<c>updatedAt</c>/<c>userId</c>/<c>deletedAt</c>,
+    /// none of which the app models. Verified live 2026-09-15.
+    /// </summary>
+    public Task<DocumentTree> GetDocumentTreeAsync(CancellationToken ct = default)
+        => GetJsonAsync<DocumentTree>("api/documents/tree", ct);
+
+    /// <summary>
+    /// Every root document as a FULL row (content, timestamps, version). No
+    /// longer on the Documents view's load path — <see cref="GetDocumentTreeAsync"/>
+    /// covers the sidebar — but kept as the only way to pull document bodies in
+    /// bulk.
+    /// </summary>
     public async Task<DocumentsPage> GetRootDocumentsAsync(CancellationToken ct = default)
     {
         using var resp = await SendAsync(HttpMethod.Get, "api/documents", body: null, ct);

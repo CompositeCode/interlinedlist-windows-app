@@ -14,6 +14,7 @@
         <BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
         <local:NullOrEmptyToVisibilityConverter x:Key="NullOrEmptyToVisibility"/>
         <local:StringEqualsToBoolConverter x:Key="StringEqualsToBool"/>
+        <local:InverseBooleanConverter x:Key="InverseBool"/>
 
         <!-- Text field -->
         <Style x:Key="FieldStyle" TargetType="TextBox">
@@ -586,22 +587,44 @@
                                                            Style="{StaticResource SubtleTextStyle}"
                                                            Margin="0,2,0,0"
                                                            Visibility="{Binding Description, Converter={StaticResource NullOrEmptyToVisibility}}"/>
+                                                <TextBlock Text="{Binding StatusMessage}"
+                                                           Foreground="#FFE81123"
+                                                           FontSize="11"
+                                                           TextWrapping="Wrap"
+                                                           Margin="0,4,0,0"
+                                                           Visibility="{Binding StatusMessage, Converter={StaticResource NullOrEmptyToVisibility}}"/>
                                             </StackPanel>
-                                            <StackPanel Grid.Column="1"
-                                                        Orientation="Horizontal"
-                                                        VerticalAlignment="Center">
-                                                <CheckBox Content="Push"
-                                                          IsChecked="{Binding Push, Mode=TwoWay}"
-                                                          Foreground="{DynamicResource TextBodyBrush}"
-                                                          FontSize="12"
-                                                          Margin="0,0,14,0"
-                                                          VerticalAlignment="Center"/>
-                                                <CheckBox Content="In-app"
-                                                          IsChecked="{Binding InApp, Mode=TwoWay}"
-                                                          Foreground="{DynamicResource TextBodyBrush}"
-                                                          FontSize="12"
-                                                          VerticalAlignment="Center"/>
-                                            </StackPanel>
+                                            <!-- One checkbox per channel the event
+                                                 actually supports. A fixed Push/In-app
+                                                 pair silently broke follow, reply and
+                                                 share, which the server rejects with 400
+                                                 for an unsupported channel. -->
+                                            <ItemsControl Grid.Column="1"
+                                                          ItemsSource="{Binding Channels}"
+                                                          VerticalAlignment="Center">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate>
+                                                        <StackPanel Orientation="Horizontal"/>
+                                                    </ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate DataType="{x:Type vm:NotificationChannelViewModel}">
+                                                        <!-- ToolTip explains a channel this
+                                                             desktop app cannot deliver: push is
+                                                             iOS/Android only, so the setting
+                                                             governs the user's phone. -->
+                                                        <CheckBox Content="{Binding Label}"
+                                                                  IsChecked="{Binding Enabled, Mode=TwoWay}"
+                                                                  IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                                                                  ToolTip="{Binding DeliveryNote}"
+                                                                  ToolTipService.ShowOnDisabled="True"
+                                                                  Foreground="{DynamicResource TextBodyBrush}"
+                                                                  FontSize="12"
+                                                                  Margin="0,0,14,0"
+                                                                  VerticalAlignment="Center"/>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
                                         </Grid>
                                     </Border>
                                 </DataTemplate>

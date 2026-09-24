@@ -361,6 +361,13 @@
                                     <!-- Card content -->
                                     <StackPanel Grid.Column="1" Margin="12,10">
 
+                                        <!-- "↻ Pushed" / "❝ Quoted" badge -->
+                                        <TextBlock Text="{Binding RepostLabel}"
+                                                   FontSize="10" FontWeight="SemiBold"
+                                                   Foreground="{StaticResource TealAccentBrush}"
+                                                   Margin="0,0,0,4"
+                                                   Visibility="{Binding IsPushOrQuote, Converter={StaticResource BoolToVisibility}}"/>
+
                                         <!-- Header row -->
                                         <DockPanel Margin="0,0,0,6">
                                             <Border DockPanel.Dock="Left"
@@ -391,13 +398,71 @@
                                                        HorizontalAlignment="Right"/>
                                         </DockPanel>
 
-                                        <!-- Body -->
-                                        <TextBlock Text="{Binding Content}"
+                                        <!-- Body. MentionText renders @mentions as
+                                             clickable links (#94); the Visibility
+                                             binding below collapses this for a bare
+                                             Push, which carries no commentary (#31).
+                                             Both belong on this one element. -->
+                                        <TextBlock local:MentionText.Text="{Binding Content}"
                                                    FontSize="13"
                                                    Foreground="{DynamicResource TextBodyBrush}"
                                                    TextWrapping="Wrap"
                                                    LineHeight="20"
-                                                   Margin="0,0,0,8"/>
+                                                   Margin="0,0,0,8"
+                                                   Visibility="{Binding HasContent, Converter={StaticResource BoolToVisibility}}"/>
+
+                                        <!-- Embedded original, from the nested pushedMessage -->
+                                        <Border Margin="0,0,0,8"
+                                                Background="{DynamicResource Surface2Brush}"
+                                                BorderBrush="{DynamicResource BorderBrush}"
+                                                BorderThickness="1" CornerRadius="3" Padding="10,8"
+                                                Visibility="{Binding HasQuotedOriginal, Converter={StaticResource BoolToVisibility}}">
+                                            <StackPanel>
+                                                <DockPanel Margin="0,0,0,4">
+                                                    <Border DockPanel.Dock="Left"
+                                                            Width="18" Height="18" CornerRadius="999"
+                                                            ClipToBounds="True"
+                                                            Background="{DynamicResource Surface3Brush}"
+                                                            Margin="0,0,6,0">
+                                                        <Image Source="{Binding QuotedAvatarUrl}" Stretch="UniformToFill"/>
+                                                    </Border>
+                                                    <Button DockPanel.Dock="Left"
+                                                            Content="{Binding QuotedAuthorDisplayName}"
+                                                            Command="{Binding OpenQuotedAuthorCommand}"
+                                                            Style="{StaticResource AuthorLinkBtnStyle}"
+                                                            FontSize="11"
+                                                            VerticalAlignment="Center"
+                                                            Margin="0,0,6,0"/>
+                                                    <TextBlock DockPanel.Dock="Left"
+                                                               Text="{Binding QuotedAuthorHandle}"
+                                                               FontSize="10"
+                                                               Foreground="{DynamicResource TextMutedBrush}"
+                                                               VerticalAlignment="Center"/>
+                                                    <TextBlock DockPanel.Dock="Right"
+                                                               Text="{Binding QuotedTimeFormatted}"
+                                                               FontFamily="JetBrains Mono, Consolas"
+                                                               FontSize="10"
+                                                               Foreground="{DynamicResource TextMutedBrush}"
+                                                               HorizontalAlignment="Right"/>
+                                                </DockPanel>
+                                                <TextBlock Text="{Binding QuotedContent}"
+                                                           FontSize="12"
+                                                           Foreground="{DynamicResource TextBodyBrush}"
+                                                           TextWrapping="Wrap" LineHeight="18"
+                                                           MaxHeight="120" TextTrimming="CharacterEllipsis"/>
+                                                <ItemsControl ItemsSource="{Binding QuotedImageUrls}" Margin="0,6,0,0"
+                                                              Visibility="{Binding QuotedHasImages, Converter={StaticResource BoolToVisibility}}">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <Border Margin="0,0,0,4" CornerRadius="3"
+                                                                    ClipToBounds="True" HorizontalAlignment="Left">
+                                                                <Image Source="{Binding}" Stretch="Uniform" MaxHeight="180"/>
+                                                            </Border>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </StackPanel>
+                                        </Border>
 
                                         <!-- Attached images -->
                                         <ItemsControl ItemsSource="{Binding ImageUrls}" Margin="0,0,0,8"
@@ -427,8 +492,8 @@
                                             </ItemsControl.ItemTemplate>
                                         </ItemsControl>
 
-                                        <!-- Footer: Dig + actions -->
-                                        <StackPanel Orientation="Horizontal">
+                                        <!-- Footer: Dig + actions (wraps — the row is long on a narrow window) -->
+                                        <WrapPanel>
                                             <Button Content="Dig"
                                                     Command="{Binding DigCommand}">
                                                 <Button.Style>
@@ -448,6 +513,20 @@
                                                        Foreground="{DynamicResource TextMutedBrush}"
                                                        VerticalAlignment="Center"
                                                        Margin="8,0,12,0"/>
+                                            <!-- pushCount, alongside digCount -->
+                                            <TextBlock Text="{Binding PushCount, StringFormat=↻ {0}}"
+                                                       FontFamily="JetBrains Mono, Consolas"
+                                                       FontSize="10"
+                                                       Foreground="{DynamicResource TextMutedBrush}"
+                                                       VerticalAlignment="Center"
+                                                       Margin="0,0,12,0"
+                                                       ToolTip="Pushes"/>
+                                            <Button Content="Push" Command="{Binding PushCommand}"
+                                                    Style="{StaticResource CardActionBtnStyle}"
+                                                    ToolTip="Re-share as-is. Always public."/>
+                                            <Button Content="Quote" Command="{Binding StartQuoteCommand}"
+                                                    Style="{StaticResource CardActionBtnStyle}"
+                                                    ToolTip="Re-share with your own note. Always public."/>
                                             <Button Content="Reply" Command="{Binding StartReplyCommand}"
                                                     Style="{StaticResource CardActionBtnStyle}"/>
                                             <Button Content="Replies" Command="{Binding ToggleRepliesCommand}"
@@ -461,6 +540,40 @@
                                             <Button Content="Report" Command="{Binding ReportCommand}"
                                                     Style="{StaticResource CardActionBtnStyle}"
                                                     Visibility="{Binding CanReport, Converter={StaticResource BoolToVisibility}}"/>
+                                        </WrapPanel>
+
+                                        <!-- Per-card status (a failed Push/Quote, or "Reported. Thanks…") -->
+                                        <TextBlock Text="{Binding ErrorMessage}"
+                                                   FontSize="11"
+                                                   Foreground="{StaticResource AmberBrush}"
+                                                   TextWrapping="Wrap"
+                                                   Margin="0,6,0,0"
+                                                   Visibility="{Binding ErrorMessage, Converter={StaticResource NullOrEmptyToVisibility}}"/>
+
+                                        <!-- Quote composer: the banner IS the "this will be public" confirmation -->
+                                        <StackPanel Margin="0,8,0,0"
+                                                    Visibility="{Binding IsComposingQuote, Converter={StaticResource BoolToVisibility}}">
+                                            <Border Background="#1AF0A830"
+                                                    BorderBrush="{StaticResource AmberBrush}"
+                                                    BorderThickness="1" CornerRadius="3"
+                                                    Padding="8,6" Margin="0,0,0,6">
+                                                <TextBlock Text="Quotes are always public — everyone will be able to see this, whatever your default visibility is."
+                                                           FontSize="11"
+                                                           Foreground="{DynamicResource TextBodyBrush}"
+                                                           TextWrapping="Wrap"/>
+                                            </Border>
+                                            <TextBox Text="{Binding QuoteText, UpdateSourceTrigger=PropertyChanged}"
+                                                     AcceptsReturn="True" TextWrapping="Wrap"
+                                                     MinHeight="44" Padding="8,6" FontSize="13"
+                                                     Background="{DynamicResource Surface2Brush}"
+                                                     Foreground="{DynamicResource TextBodyBrush}"
+                                                     BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"/>
+                                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,6,0,0">
+                                                <Button Content="Cancel" Command="{Binding CancelQuoteCommand}"
+                                                        Style="{StaticResource CardActionBtnStyle}" Margin="0,0,6,0"/>
+                                                <Button Content="Quote publicly" Command="{Binding PostQuoteCommand}"
+                                                        Style="{StaticResource PrimaryBtnStyle}"/>
+                                            </StackPanel>
                                         </StackPanel>
 
                                         <!-- Inline edit -->
@@ -518,7 +631,7 @@
                                                                            Foreground="{DynamicResource TextMutedBrush}"
                                                                            HorizontalAlignment="Right"/>
                                                             </DockPanel>
-                                                            <TextBlock Text="{Binding Content}" FontSize="12"
+                                                            <TextBlock local:MentionText.Text="{Binding Content}" FontSize="12"
                                                                        Foreground="{DynamicResource TextBodyBrush}"
                                                                        TextWrapping="Wrap" LineHeight="18"/>
                                                         </StackPanel>
@@ -558,7 +671,7 @@
                                   <StackPanel>
                                       <TextBlock Text="⏱ Scheduled" FontSize="10" FontWeight="SemiBold"
                                                  Foreground="{StaticResource AmberBrush}" Margin="0,0,0,4"/>
-                                      <TextBlock Text="{Binding Content}" FontSize="13"
+                                      <TextBlock local:MentionText.Text="{Binding Content}" FontSize="13"
                                                  Foreground="{DynamicResource TextBodyBrush}" TextWrapping="Wrap"/>
                                   </StackPanel>
                               </Border>
