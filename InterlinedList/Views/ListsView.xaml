@@ -460,15 +460,25 @@
 
                 <!-- Create list form -->
                 <StackPanel Grid.Row="1" Margin="16,0,16,12">
+                    <local:NewListTabs x:Name="NewListTabsPanel" ParentListSource="{Binding Lists}" ListsRefreshCommand="{Binding LoadListsCommand}"/>
                     <TextBox Text="{Binding NewListTitle, UpdateSourceTrigger=PropertyChanged}"
                              Style="{StaticResource FieldStyle}"
+                             Visibility="{Binding IsLocalTabSelected, ElementName=NewListTabsPanel, Converter={StaticResource BoolToVisibility}}"
                              Tag="Title"/>
                     <TextBox Text="{Binding NewListDescription, UpdateSourceTrigger=PropertyChanged}"
                              Style="{StaticResource FieldStyle}"
+                             Visibility="{Binding IsLocalTabSelected, ElementName=NewListTabsPanel, Converter={StaticResource BoolToVisibility}}"
                              AcceptsReturn="True"
                              TextWrapping="Wrap"
                              MinHeight="52"/>
-                    <StackPanel Orientation="Horizontal">
+                    <!-- Both buttons belong to the LOCAL tab, so the visibility
+                         binding sits on the StackPanel rather than on "Create list"
+                         alone (#73 + #18). The GitHub-backed tab has its own create
+                         flow inside NewListTabs, and "Define columns" is meaningless
+                         there — a GitHub-backed list's columns come from the repo. -->
+                    <StackPanel Orientation="Horizontal"
+                                HorizontalAlignment="Left"
+                                Visibility="{Binding IsLocalTabSelected, ElementName=NewListTabsPanel, Converter={StaticResource BoolToVisibility}}">
                         <Button Content="Create list"
                                 Command="{Binding CreateListCommand}"
                                 Style="{StaticResource PrimaryBtnStyle}"
@@ -513,6 +523,7 @@
                                                        FontSize="13" FontWeight="SemiBold"
                                                        Foreground="{DynamicResource TextBrush}"
                                                        TextWrapping="Wrap"/>
+                                            <local:GitHubListBadge ListId="{Binding Id}" Margin="0,3,0,0"/>
                                             <TextBlock Text="{Binding Description}"
                                                        FontSize="11"
                                                        Foreground="{DynamicResource TextMutedBrush}"

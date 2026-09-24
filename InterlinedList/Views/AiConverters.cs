@@ -6,20 +6,6 @@ using InterlinedList.ViewModels;
 
 namespace InterlinedList.Views;
 
-/// <summary>
-/// Visible when the bound object is non-null. The AI panels use one nullable
-/// <see cref="AiNotice"/> / artifact slot each, so "is something there" is the
-/// visibility question over and over.
-/// </summary>
-public sealed class NotNullToVisibilityConverter : IValueConverter
-{
-    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
-        value is null ? Visibility.Collapsed : Visibility.Visible;
-
-    public object ConvertBack(object value, Type targetType, object? parameter, CultureInfo culture) =>
-        throw new NotSupportedException();
-}
-
 // InverseBoolToVisibilityConverter is NOT declared here. It already exists in
 // ListsViewConverters.cs, in this same InterlinedList.Views namespace, with a
 // byte-identical implementation — declaring it twice is CS0101/CS0111.

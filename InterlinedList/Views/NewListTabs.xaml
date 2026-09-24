@@ -1,0 +1,432 @@
+<UserControl x:Class="InterlinedList.Views.NewListTabs"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:models="clr-namespace:InterlinedList.Models"
+             xmlns:local="clr-namespace:InterlinedList.Views"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d"
+             d:DesignWidth="308">
+
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
+        <local:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibility"/>
+        <local:NullOrEmptyToVisibilityConverter x:Key="NullOrEmptyToVisibility"/>
+        <local:TrueOnlyToVisibilityConverter x:Key="TrueOnlyToVisibility"/>
+
+        <!-- Tabs are Buttons, not RadioButtons, on purpose: a RadioButton's click
+             handler calls SetValue on IsChecked, which tears down a OneWay binding
+             to the view model. Buttons keep the selected state entirely in the view
+             model and only reflect it, so the tab can also be switched in code (the
+             GitHub tab's selection is what triggers the link check).
+
+             The active underline rides on the Button's own BorderBrush because a
+             Style trigger cannot target a named element inside a ControlTemplate —
+             only ControlTemplate.Triggers can — so the template template-binds it
+             and the DataTrigger sets the property. -->
+        <Style x:Key="TabBtnStyle" TargetType="Button">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="0,0,0,2"
+                                Padding="2,4,2,6">
+                            <ContentPresenter/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="PanelFieldStyle" TargetType="TextBox">
+            <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextBodyBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="8,6"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Margin" Value="0,0,0,8"/>
+        </Style>
+
+        <Style x:Key="PanelSmallBtnStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="10,3"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="3"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="PanelPrimaryBtnStyle" TargetType="Button">
+            <Setter Property="Background" Value="{DynamicResource PrimaryBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="14,6"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                CornerRadius="4"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="{DynamicResource PrimaryHoverBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <StackPanel>
+
+        <!-- ── The two tabs from /help/lists ─────────────────────────────── -->
+        <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+            <Button Content="Local List"
+                    Command="{Binding SelectLocalTabCommand}"
+                    Margin="0,0,14,0">
+                <Button.Style>
+                    <Style TargetType="Button" BasedOn="{StaticResource TabBtnStyle}">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsLocalTabSelected}" Value="True">
+                                <Setter Property="BorderBrush" Value="{DynamicResource PrimaryBrush}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+                                <Setter Property="FontWeight" Value="SemiBold"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Button.Style>
+            </Button>
+            <Button Command="{Binding SelectGitHubTabCommand}">
+                <Button.Style>
+                    <Style TargetType="Button" BasedOn="{StaticResource TabBtnStyle}">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsGitHubTabSelected}" Value="True">
+                                <Setter Property="BorderBrush" Value="{DynamicResource PrimaryBrush}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+                                <Setter Property="FontWeight" Value="SemiBold"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Button.Style>
+                <StackPanel Orientation="Horizontal">
+                    <local:GitHubMark Width="12" Height="12" Margin="0,0,5,0"
+                                      VerticalAlignment="Center"
+                                      Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
+                    <TextBlock Text="GitHub-backed List" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
+        </StackPanel>
+
+        <!-- ── The GitHub tab's body ─────────────────────────────────────── -->
+        <StackPanel Visibility="{Binding IsGitHubTabSelected, Converter={StaticResource BoolToVisibility}}">
+
+            <!-- Connection gate. Shown whatever the state, because the API has no
+                 scope introspection: a sign-in-only link looks exactly like an
+                 Issues-capable one until a call comes back empty or refused. -->
+            <Border Background="{DynamicResource Surface2Brush}"
+                    BorderBrush="{DynamicResource BorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="4"
+                    Padding="10,8"
+                    Margin="0,0,0,10">
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                        <local:GitHubMark Width="13" Height="13" Margin="0,0,6,0"
+                                          VerticalAlignment="Center"
+                                          Foreground="{DynamicResource TextBrush}"/>
+                        <TextBlock Text="{Binding Link.StatusLine}"
+                                   FontSize="12" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextBrush}"
+                                   TextWrapping="Wrap"
+                                   VerticalAlignment="Center"/>
+                    </StackPanel>
+
+                    <TextBlock Text="{Binding Link.ScopeNote}"
+                               FontSize="11"
+                               Foreground="{DynamicResource TextMutedBrush}"
+                               TextWrapping="Wrap"
+                               Margin="0,0,0,8"/>
+
+                    <StackPanel Orientation="Horizontal">
+                        <Button Content="{Binding Link.ReconnectLabel}"
+                                Command="{Binding Link.ReconnectCommand}"
+                                Style="{StaticResource PanelSmallBtnStyle}"
+                                Margin="0,0,6,0"/>
+                        <Button Content="Check again"
+                                Command="{Binding CheckConnectionCommand}"
+                                Style="{StaticResource PanelSmallBtnStyle}"/>
+                    </StackPanel>
+
+                    <TextBlock Text="{Binding Link.HandoffNotice}"
+                               FontSize="11"
+                               Foreground="{DynamicResource TextMutedBrush}"
+                               TextWrapping="Wrap"
+                               Margin="0,6,0,0"
+                               Visibility="{Binding Link.HandoffNotice, Converter={StaticResource NullOrEmptyToVisibility}}"/>
+
+                    <TextBlock Text="{Binding Link.ErrorMessage}"
+                               Foreground="#FFE81123"
+                               FontSize="11"
+                               TextWrapping="Wrap"
+                               Margin="0,6,0,0"
+                               Visibility="{Binding Link.ErrorMessage, Converter={StaticResource NullOrEmptyToVisibility}}"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Repo picker. Everything below is only reachable once linked. -->
+            <StackPanel Visibility="{Binding Link.IsLinked, Converter={StaticResource BoolToVisibility}}">
+
+                <TextBlock Text="Repository"
+                           FontSize="12" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextBrush}"
+                           Margin="0,0,0,4"/>
+
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                    <Button Content="My repositories"
+                            Command="{Binding Picker.LoadMyReposCommand}"
+                            Style="{StaticResource PanelSmallBtnStyle}"
+                            Margin="0,0,6,0"/>
+                    <TextBlock Text="Loading…"
+                               FontSize="11"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextMutedBrush}"
+                               Visibility="{Binding Picker.IsLoading, Converter={StaticResource BoolToVisibility}}"/>
+                </StackPanel>
+
+                <!-- An org login is typed, not only picked: GET /api/github/orgs is
+                     empty for an account in no organizations, yet any public org's
+                     repositories still load (?org=github returned 559 from exactly
+                     such an account). Must be an ORG login — a user login 404s. -->
+                <Grid Margin="0,0,0,6">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBox Grid.Column="0"
+                             Text="{Binding Picker.OrgLogin, UpdateSourceTrigger=PropertyChanged}"
+                             Style="{StaticResource PanelFieldStyle}"
+                             Margin="0,0,6,0"
+                             ToolTip="An organization login, e.g. dotnet. A personal account's repositories come from &quot;My repositories&quot; — a user login here returns 404."/>
+                    <Button Grid.Column="1"
+                            Content="Load org"
+                            Command="{Binding Picker.LoadOrgReposCommand}"
+                            Style="{StaticResource PanelSmallBtnStyle}"
+                            VerticalAlignment="Top"
+                            Margin="0,1,0,0"/>
+                </Grid>
+
+                <TextBlock Text="Organization login, e.g. dotnet"
+                           FontSize="11"
+                           Foreground="{DynamicResource TextMutedBrush}"
+                           Margin="0,0,0,6"/>
+
+                <!-- Orgs the account actually belongs to, when there are any. -->
+                <ItemsControl ItemsSource="{Binding Picker.Orgs}" Margin="0,0,0,6">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type models:GitHubOrg}">
+                            <Button Content="{Binding DisplayName}"
+                                    Command="{Binding DataContext.Picker.PickOrgCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                    CommandParameter="{Binding}"
+                                    Style="{StaticResource PanelSmallBtnStyle}"
+                                    Margin="0,0,4,4"/>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <TextBox Text="{Binding Picker.FilterText, UpdateSourceTrigger=PropertyChanged}"
+                         Style="{StaticResource PanelFieldStyle}"
+                         Visibility="{Binding Picker.HasLoaded, Converter={StaticResource BoolToVisibility}}"
+                         ToolTip="Filter the loaded repositories"/>
+
+                <!-- Virtualized: an org can return 2,000 rows. -->
+                <ListBox ItemsSource="{Binding Picker.VisibleRepos}"
+                         SelectedItem="{Binding Picker.SelectedRepo}"
+                         MaxHeight="190"
+                         Margin="0,0,0,6"
+                         Background="{DynamicResource SurfaceBrush}"
+                         BorderBrush="{DynamicResource BorderBrush}"
+                         BorderThickness="1"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                         VirtualizingPanel.IsVirtualizing="True"
+                         VirtualizingPanel.VirtualizationMode="Recycling"
+                         Visibility="{Binding Picker.HasLoaded, Converter={StaticResource BoolToVisibility}}">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate DataType="{x:Type models:GitHubRepo}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{Binding FullName}"
+                                           FontSize="12"
+                                           Foreground="{DynamicResource TextBodyBrush}"
+                                           TextTrimming="CharacterEllipsis"/>
+                                <!-- Repo visibility on GitHub, previewed here so the
+                                     "Private repo" tag on the finished list isn't a
+                                     surprise. Not the list's own visibility. -->
+                                <Border Background="{DynamicResource Surface3Brush}"
+                                        CornerRadius="3"
+                                        Padding="4,0"
+                                        Margin="6,0,0,0"
+                                        VerticalAlignment="Center"
+                                        Visibility="{Binding IsPrivate, Converter={StaticResource TrueOnlyToVisibility}}">
+                                    <TextBlock Text="private"
+                                               FontSize="10"
+                                               FontFamily="JetBrains Mono, Consolas"
+                                               Foreground="{DynamicResource AmberBrush}"/>
+                                </Border>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+
+                <TextBlock Text="{Binding Picker.ResultSummary}"
+                           FontSize="11"
+                           Foreground="{DynamicResource TextMutedBrush}"
+                           TextWrapping="Wrap"
+                           Margin="0,0,0,8"/>
+
+                <TextBlock Text="{Binding Picker.ErrorMessage}"
+                           Foreground="#FFE81123"
+                           FontSize="11"
+                           TextWrapping="Wrap"
+                           Margin="0,0,0,6"
+                           Visibility="{Binding Picker.ErrorMessage, Converter={StaticResource NullOrEmptyToVisibility}}"/>
+
+                <!-- "Manage organization access" is a DIFFERENT remedy from
+                     Reconnect: re-running OAuth with unchanged scopes returns
+                     silently, so only GitHub's authorized-apps page can approve an
+                     organization. Offered next to a failed org load, where that is
+                     the likely cause. -->
+                <Button Content="Manage organization access on GitHub"
+                        Command="{Binding Link.ManageOrgAccessCommand}"
+                        Style="{StaticResource PanelSmallBtnStyle}"
+                        HorizontalAlignment="Left"
+                        Margin="0,0,0,10"
+                        Visibility="{Binding Link.CanManageOrgAccess, Converter={StaticResource BoolToVisibility}}"/>
+
+                <!-- Title, defaulting to the repo name. -->
+                <TextBlock Text="List title"
+                           FontSize="12" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextBrush}"
+                           Margin="0,0,0,4"/>
+                <TextBox Text="{Binding GitHubTitle, UpdateSourceTrigger=PropertyChanged}"
+                         Style="{StaticResource PanelFieldStyle}"/>
+                <TextBlock Text="Defaults to the repository name."
+                           FontSize="11"
+                           Foreground="{DynamicResource TextMutedBrush}"
+                           Margin="0,-4,0,8"/>
+
+                <TextBox Text="{Binding GitHubDescription, UpdateSourceTrigger=PropertyChanged}"
+                         Style="{StaticResource PanelFieldStyle}"
+                         AcceptsReturn="True"
+                         TextWrapping="Wrap"
+                         MinHeight="44"
+                         ToolTip="Description (optional)"/>
+
+                <!-- Parent list (optional). -->
+                <TextBlock Text="Parent list (optional)"
+                           FontSize="12" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextBrush}"
+                           Margin="0,0,0,4"/>
+                <Grid Margin="0,0,0,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <ComboBox Grid.Column="0"
+                              ItemsSource="{Binding ParentListSource, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                              SelectedItem="{Binding SelectedParentList}"
+                              DisplayMemberPath="Title"
+                              FontSize="12"
+                              Padding="6,4"
+                              Margin="0,0,6,0"/>
+                    <Button Grid.Column="1"
+                            Content="None"
+                            Command="{Binding ClearParentListCommand}"
+                            Style="{StaticResource PanelSmallBtnStyle}"/>
+                </Grid>
+
+                <!-- List visibility. Explicitly NOT the repository's. -->
+                <CheckBox Content="Public list"
+                          IsChecked="{Binding IsPublic}"
+                          FontSize="12"
+                          Foreground="{DynamicResource TextBodyBrush}"
+                          Margin="0,0,0,2"/>
+                <TextBlock Text="Who can see the InterlinedList list. Separate from whether the repository is private on GitHub."
+                           FontSize="11"
+                           Foreground="{DynamicResource TextMutedBrush}"
+                           TextWrapping="Wrap"
+                           Margin="0,0,0,10"/>
+
+                <Button Content="Create GitHub-backed list"
+                        Command="{Binding CreateGitHubListCommand}"
+                        Style="{StaticResource PanelPrimaryBtnStyle}"
+                        HorizontalAlignment="Left"/>
+
+                <TextBlock Text="{Binding SelectedRepoLabel}"
+                           FontSize="11"
+                           FontFamily="JetBrains Mono, Consolas"
+                           Foreground="{DynamicResource TextMutedBrush}"
+                           TextWrapping="Wrap"
+                           Margin="0,6,0,0"/>
+
+                <TextBlock Text="{Binding SuccessMessage}"
+                           FontSize="11"
+                           Foreground="{DynamicResource PrimaryBrush}"
+                           TextWrapping="Wrap"
+                           Margin="0,6,0,0"
+                           Visibility="{Binding SuccessMessage, Converter={StaticResource NullOrEmptyToVisibility}}"/>
+
+                <TextBlock Text="{Binding ErrorMessage}"
+                           Foreground="#FFE81123"
+                           FontSize="11"
+                           TextWrapping="Wrap"
+                           Margin="0,6,0,0"
+                           Visibility="{Binding ErrorMessage, Converter={StaticResource NullOrEmptyToVisibility}}"/>
+            </StackPanel>
+        </StackPanel>
+    </StackPanel>
+</UserControl>
