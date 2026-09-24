@@ -28,6 +28,21 @@ public sealed class EndpointInventoryTests
     private static readonly Regex Interpolation = new(@"\{Uri\.EscapeDataString\(([A-Za-z0-9_]+)\)\}", RegexOptions.Compiled);
     private static readonly Regex GetHelper = new(@"\bGet[A-Za-z]*Async\s*[<(]", RegexOptions.Compiled);
 
+    /// <summary>
+    /// A helper whose NAME carries its verb — <c>Get…Async</c>, <c>Put…Async</c>,
+    /// <c>Post…Async</c>, <c>Patch…Async</c>, <c>Delete…Async</c>.
+    /// </summary>
+    /// <remarks>
+    /// Only consulted after <see cref="HttpVerb"/> fails, so a helper that takes
+    /// an explicit <c>HttpMethod</c> always wins and this can never override it.
+    /// Matching the convention rather than a hand-kept list matters: the client
+    /// grows domain helpers that delegate to the shared ones
+    /// (<c>GetSettingsDocumentOrNullAsync</c>, <c>PutSettingsAsync</c>), and each
+    /// one would otherwise appear as a new UNKNOWN.
+    /// </remarks>
+    private static readonly Regex VerbPrefixedHelper =
+        new(@"\b(Get|Put|Post|Patch|Delete)[A-Za-z]*Async\s*[<(]", RegexOptions.Compiled);
+
     [Fact]
     public void Manifest_classifies_exactly_the_endpoints_the_client_calls()
     {
@@ -182,8 +197,106 @@ public sealed class EndpointInventoryTests
             return "POST";
         if (GetHelper.IsMatch(statement))
             return "GET";
+        var statementHelper = VerbPrefixedHelper.Match(statement);
+        if (statementHelper.Success)
+            return statementHelper.Groups[1].Value.ToUpperInvariant();
+
+        // The statement alone wasn't enough. Widen to the ENCLOSING MEMBER and
+        // try again.
+        //
+        // Three real shapes need this, all introduced as the client grew:
+        //
+        //   1. Path hoisted into a local, verb used later:
+        //        var path = $"api/dm/conversations?take={…}";
+        //        …
+        //        var json = await GetElementAsync(path, ct);
+        //
+        //   2. Path in a const, used by several methods:
+        //        private const string MaterializePath = "api/materialize";
+        //
+        //   3. A multi-line call whose argument line ends in '}', which
+        //      ReadStatementUpTo reads as a statement boundary:
+        //        => GetJsonAsync<NewsWidget>(
+        //               source is { Length: > 0 }        <-- looks like a boundary
+        //                   ? $"api/widgets/news?source={…}"
+        //                   : "api/widgets/news",
+        //
+        // Widening to the member — not to a fixed number of lines — is what
+        // keeps this safe. A fixed look-back is what mislabelled adjacent
+        // one-line members in Follow.cs (see the remarks above); member bounds
+        // cannot cross into a neighbour.
+        var member = ReadEnclosingMember(lines, index);
+
+        var memberVerb = HttpVerb.Match(member);
+        if (memberVerb.Success)
+            return memberVerb.Groups[1].Value.ToUpperInvariant();
+        if (member.Contains("SendMultipartAsync", StringComparison.Ordinal))
+            return "POST";
+        if (GetHelper.IsMatch(member))
+            return "GET";
+        var memberHelper = VerbPrefixedHelper.Match(member);
+        if (memberHelper.Success)
+            return memberHelper.Groups[1].Value.ToUpperInvariant();
+
+        // A const shared by several methods has no verb in its own member, so
+        // fall back to how the const NAME is used elsewhere in the file.
+        var constName = ConstDeclaration.Match(lines[index]);
+        if (constName.Success)
+        {
+            var name = constName.Groups[1].Value;
+            foreach (var line in lines)
+            {
+                if (!line.Contains(name, StringComparison.Ordinal)) continue;
+                var useVerb = HttpVerb.Match(line);
+                if (useVerb.Success) return useVerb.Groups[1].Value.ToUpperInvariant();
+                if (GetHelper.IsMatch(line)) return "GET";
+            }
+        }
 
         return "UNKNOWN";
+    }
+
+    /// <summary>
+    /// Matches <c>private const string SomeName = "api/…"</c> so a path held in
+    /// a constant can be resolved from how that constant is used.
+    /// </summary>
+    private static readonly Regex ConstDeclaration =
+        new(@"const\s+string\s+(\w+)\s*=", RegexOptions.Compiled);
+
+    /// <summary>
+    /// The text of the member (method / property / field) containing
+    /// <paramref name="index"/>.
+    /// </summary>
+    /// <remarks>
+    /// Bounds are found by scanning out to the nearest member declaration or
+    /// blank line, and are deliberately narrow: widening to the whole file
+    /// would let one method's verb resolve another's path, which is exactly the
+    /// class of silent mislabelling this scanner exists to avoid.
+    /// </remarks>
+    private static string ReadEnclosingMember(string[] lines, int index)
+    {
+        static bool IsMemberStart(string line)
+        {
+            var t = line.Trim();
+            if (t.Length == 0) return true;
+            return (t.StartsWith("public ", StringComparison.Ordinal)
+                    || t.StartsWith("private ", StringComparison.Ordinal)
+                    || t.StartsWith("internal ", StringComparison.Ordinal)
+                    || t.StartsWith("protected ", StringComparison.Ordinal))
+                   && !t.StartsWith("private static readonly Regex", StringComparison.Ordinal);
+        }
+
+        var start = index;
+        while (start > 0 && !IsMemberStart(lines[start])) start--;
+
+        var end = index;
+        while (end < lines.Length - 1)
+        {
+            end++;
+            if (IsMemberStart(lines[end])) { end--; break; }
+        }
+
+        return string.Join(" ", lines.Skip(start).Take(end - start + 1));
     }
 
     /// <summary>
