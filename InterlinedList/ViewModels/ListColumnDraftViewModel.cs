@@ -88,6 +88,19 @@ public partial class ListColumnDraftViewModel : ObservableObject
     /// <summary>The type this column was saved with; null for a new column.</summary>
     public string? StoredType { get; private init; }
 
+    /// <summary>The label it was saved with — a rename is a safe, non-destructive edit.</summary>
+    public string? StoredLabel { get; private init; }
+
+    /// <summary>Its saved position, so a reorder can be reported as one.</summary>
+    public int? StoredOrder { get; private init; }
+
+    /// <summary>True when the label differs from the one on the server.</summary>
+    public bool IsRenamed =>
+        IsExistingColumn && !string.Equals((Label ?? "").Trim(), StoredLabel ?? "", StringComparison.Ordinal);
+
+    /// <summary>True when the type differs from the one on the server.</summary>
+    public bool IsRetyped => IsExistingColumn && StoredType is { } stored && stored != Type;
+
     /// <summary>True once at least one row holds a value for <see cref="StoredKey"/>.</summary>
     public bool HasRowData { get; set; }
 
@@ -164,6 +177,8 @@ public partial class ListColumnDraftViewModel : ObservableObject
             PropertyId = stored?.Id,
             StoredKey = field.Key,
             StoredType = field.Type,
+            StoredLabel = field.Label,
+            StoredOrder = field.DisplayOrder,
             Validation = field.Validation,
             Visibility = field.Visibility,
             Key = field.Key,

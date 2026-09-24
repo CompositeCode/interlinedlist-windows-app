@@ -868,6 +868,59 @@
                                        Margin="0,4,0,0"
                                        Visibility="{Binding ColumnEditor.StatusMessage, Converter={StaticResource NullOrEmptyToVisibility}}"/>
 
+                            <!-- ── Destructive rebuild confirmation (#22) ─────────────
+                                 In place, not a native message box: nothing here
+                                 blocks the dispatcher. The copy names exactly what
+                                 the DSL rebuild costs — and deliberately does NOT
+                                 say rows are deleted, because they are not. -->
+                            <Border Margin="0,8,0,0"
+                                    Background="{DynamicResource Surface3Brush}"
+                                    BorderBrush="{DynamicResource AmberBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="3"
+                                    Padding="10,8"
+                                    Visibility="{Binding ColumnEditor.IsRebuildConfirmationOpen, Converter={StaticResource BoolToVisibility}}">
+                                <StackPanel>
+                                    <TextBlock Text="Rebuild every column?"
+                                               FontSize="12" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextBrush}"
+                                               Margin="0,0,0,4"/>
+
+                                    <TextBlock Text="{Binding ColumnEditor.RebuildImpactSummary}"
+                                               FontSize="11"
+                                               Foreground="{DynamicResource TextBodyBrush}"
+                                               TextWrapping="Wrap"/>
+
+                                    <!-- The rebuild writes both of these onto the list,
+                                         so they are shown and editable rather than implied. -->
+                                    <Grid Margin="0,8,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Margin="0,0,8,0">
+                                            <TextBlock Text="List title after the rebuild" Style="{StaticResource CaptionStyle}"/>
+                                            <TextBox Text="{Binding ColumnEditor.RebuildTitle, UpdateSourceTrigger=PropertyChanged}"
+                                                     Style="{StaticResource MicroFieldStyle}"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1">
+                                            <TextBlock Text="List description (blank clears it)" Style="{StaticResource CaptionStyle}"/>
+                                            <TextBox Text="{Binding ColumnEditor.RebuildDescription, UpdateSourceTrigger=PropertyChanged}"
+                                                     Style="{StaticResource MicroFieldStyle}"/>
+                                        </StackPanel>
+                                    </Grid>
+
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
+                                        <Button Content="Cancel"
+                                                Command="{Binding ColumnEditor.CancelRebuildCommand}"
+                                                Style="{StaticResource RowActionBtnStyle}"/>
+                                        <Button Content="Rebuild the columns"
+                                                Command="{Binding ColumnEditor.ConfirmRebuildCommand}"
+                                                Style="{StaticResource SmallBtnStyle}"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+
                             <!-- 409: the server named the columns that still hold data.
                                  Confirmed in place — no native message box (dispatcher rule). -->
                             <Border Margin="0,8,0,0"
@@ -893,6 +946,13 @@
                                 </StackPanel>
                             </Border>
 
+                            <!-- What the SAFE save will do, before it runs -->
+                            <TextBlock Text="{Binding ColumnEditor.SavePlanSummary}"
+                                       FontSize="11"
+                                       Foreground="{DynamicResource TextMutedBrush}"
+                                       TextWrapping="Wrap"
+                                       Margin="0,6,0,0"/>
+
                             <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                                 <Button Content="Add column"
                                         Command="{Binding ColumnEditor.AddColumnCommand}"
@@ -901,6 +961,13 @@
                                 <Button Content="{Binding ColumnEditor.SaveButtonText}"
                                         Command="{Binding ColumnEditor.SaveCommand}"
                                         Style="{StaticResource PrimaryBtnStyle}"/>
+                                <!-- The destructive path: its own button, its own words -->
+                                <Button Content="Rebuild columns…"
+                                        Command="{Binding ColumnEditor.StartRebuildCommand}"
+                                        Style="{StaticResource SmallBtnStyle}"
+                                        VerticalAlignment="Center"
+                                        Margin="6,0,0,0"
+                                        ToolTip="Drops and recreates every column, and writes the list's title and description"/>
                                 <TextBlock Text="{Binding ColumnEditor.SaveBlockedReason}"
                                            FontSize="11"
                                            Foreground="{DynamicResource TextMutedBrush}"
