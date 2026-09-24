@@ -3,10 +3,102 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="clr-namespace:InterlinedList.ViewModels"
              xmlns:local="clr-namespace:InterlinedList.Views"
+             xmlns:models="clr-namespace:InterlinedList.Models"
              Background="{DynamicResource AppBgBrush}">
 
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+
+        <!-- One follower/following row: opens the profile, and on your OWN
+             profile offers Remove for a follower. Remove is two-step (arm, then
+             confirm) rather than a modal — a native dialog would block the
+             dispatcher, and this action can't be undone. -->
+        <DataTemplate x:Key="FollowRowTemplate" DataType="{x:Type models:FollowUser}">
+            <Border Background="{DynamicResource Surface2Brush}"
+                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                    CornerRadius="3" Padding="8,5" Margin="0,0,0,4">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <Button Grid.Column="0"
+                            Command="{Binding DataContext.OpenUserCommand,
+                                      RelativeSource={RelativeSource AncestorType=UserControl}}"
+                            CommandParameter="{Binding}"
+                            Background="Transparent" BorderThickness="0" Cursor="Hand"
+                            Padding="0" HorizontalContentAlignment="Left">
+                        <StackPanel Orientation="Horizontal">
+                            <Border Width="18" Height="18" CornerRadius="999" ClipToBounds="True"
+                                    Background="{DynamicResource Surface3Brush}" Margin="0,0,6,0">
+                                <Image Source="{Binding Avatar}" Stretch="UniformToFill"/>
+                            </Border>
+                            <TextBlock Text="{Binding DisplayNameOrUsername}" FontSize="11"
+                                       Foreground="{DynamicResource TextBodyBrush}"
+                                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                        </StackPanel>
+                    </Button>
+
+                    <StackPanel Grid.Column="1" Orientation="Horizontal">
+                        <!-- Armed state: confirm / cancel -->
+                        <StackPanel Orientation="Horizontal">
+                            <StackPanel.Style>
+                                <Style TargetType="StackPanel">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <MultiDataTrigger>
+                                            <MultiDataTrigger.Conditions>
+                                                <Condition Binding="{Binding DataContext.IsOwnProfile,
+                                                           RelativeSource={RelativeSource AncestorType=UserControl}}" Value="True"/>
+                                                <Condition Binding="{Binding DataContext.PendingRemoval,
+                                                           RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                           Value="{Binding}"/>
+                                            </MultiDataTrigger.Conditions>
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </MultiDataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </StackPanel.Style>
+                            <Button Content="Confirm"
+                                    Command="{Binding DataContext.RemoveFollowerCommand,
+                                              RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                    CommandParameter="{Binding}"
+                                    Background="Transparent" BorderThickness="0" Cursor="Hand"
+                                    Foreground="#FFE81123" FontSize="10" Padding="4,0"/>
+                            <Button Content="Cancel"
+                                    Command="{Binding DataContext.CancelRemoveFollowerCommand,
+                                              RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                    Background="Transparent" BorderThickness="0" Cursor="Hand"
+                                    Foreground="{DynamicResource TextMutedBrush}" FontSize="10" Padding="4,0"/>
+                        </StackPanel>
+
+                        <!-- Resting state: Remove (own profile only) -->
+                        <Button Content="Remove"
+                                Command="{Binding DataContext.ArmRemoveFollowerCommand,
+                                          RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                CommandParameter="{Binding}"
+                                Background="Transparent" BorderThickness="0" Cursor="Hand"
+                                Foreground="{DynamicResource TextMutedBrush}" FontSize="10" Padding="4,0">
+                            <Button.Style>
+                                <Style TargetType="Button">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <MultiDataTrigger>
+                                            <MultiDataTrigger.Conditions>
+                                                <Condition Binding="{Binding DataContext.IsOwnProfile,
+                                                           RelativeSource={RelativeSource AncestorType=UserControl}}" Value="True"/>
+                                            </MultiDataTrigger.Conditions>
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </MultiDataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </DataTemplate>
 
         <!-- Primary green button -->
         <Style x:Key="PrimaryBtnStyle" TargetType="Button">
@@ -336,40 +428,69 @@
                         </StackPanel>
                     </Border>
 
-                    <!-- Mutual connections -->
-                    <StackPanel Margin="0,0,0,12"
-                                Visibility="{Binding HasMutuals, Converter={StaticResource BoolToVis}}">
-                        <TextBlock Text="Mutual connections"
-                                   FontSize="12" FontWeight="SemiBold"
-                                   Foreground="{DynamicResource TextBrush}" Margin="0,0,0,6"/>
-                        <ItemsControl ItemsSource="{Binding Mutuals}">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Button Command="{Binding DataContext.OpenUserCommand,
-                                                      RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                            CommandParameter="{Binding}"
-                                            Background="Transparent" BorderThickness="0" Cursor="Hand"
-                                            Margin="0,0,6,6" Padding="0">
-                                        <Border Background="{DynamicResource Surface2Brush}"
-                                                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
-                                                CornerRadius="3" Padding="8,4">
-                                            <StackPanel Orientation="Horizontal">
-                                                <Border Width="18" Height="18" CornerRadius="999" ClipToBounds="True"
-                                                        Background="{DynamicResource Surface3Brush}" Margin="0,0,6,0">
-                                                    <Image Source="{Binding Avatar}" Stretch="UniformToFill"/>
-                                                </Border>
-                                                <TextBlock Text="{Binding DisplayNameOrUsername}" FontSize="11"
-                                                           Foreground="{DynamicResource TextBodyBrush}" VerticalAlignment="Center"/>
-                                            </StackPanel>
-                                        </Border>
-                                    </Button>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </StackPanel>
+                    <!-- Mutual follows. Counts only: the API has no endpoint
+                         that lists the mutual users, so the clickable chips that
+                         used to be here could never render anything (#160). -->
+                    <Border Margin="0,0,0,12"
+                            Background="{DynamicResource Surface2Brush}"
+                            BorderBrush="{DynamicResource BorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="3"
+                            Padding="10,6"
+                            Visibility="{Binding HasMutuals, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Text="{Binding MutualsSummary}"
+                                   FontFamily="JetBrains Mono, Consolas"
+                                   FontSize="10"
+                                   Foreground="{DynamicResource TextBodyBrush}"
+                                   TextWrapping="Wrap"/>
+                    </Border>
+
+                    <!-- Followers / following. Paged: the server's default page
+                         is 50, so anyone with more had the rest silently dropped.
+                         The header shows "loaded of total" so the count stays
+                         honest before everything is fetched. -->
+                    <Grid Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0" Margin="0,0,6,0">
+                            <TextBlock Text="{Binding FollowersHeader}"
+                                       FontSize="10" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextMutedBrush}"
+                                       Margin="0,0,0,6"/>
+                            <ItemsControl ItemsSource="{Binding Followers}"
+                                          ItemTemplate="{StaticResource FollowRowTemplate}"/>
+                            <Button Content="Load more"
+                                    Command="{Binding LoadMoreFollowersCommand}"
+                                    Visibility="{Binding HasMoreFollowers, Converter={StaticResource BoolToVis}}"
+                                    Background="Transparent"
+                                    BorderBrush="{DynamicResource BorderBrush}"
+                                    BorderThickness="1"
+                                    Foreground="{DynamicResource LinkBrush}"
+                                    FontSize="11" Padding="8,4" Margin="0,4,0,0"
+                                    HorizontalAlignment="Left" Cursor="Hand"/>
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="1" Margin="6,0,0,0">
+                            <TextBlock Text="{Binding FollowingHeader}"
+                                       FontSize="10" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextMutedBrush}"
+                                       Margin="0,0,0,6"/>
+                            <ItemsControl ItemsSource="{Binding Following}"
+                                          ItemTemplate="{StaticResource FollowRowTemplate}"/>
+                            <Button Content="Load more"
+                                    Command="{Binding LoadMoreFollowingCommand}"
+                                    Visibility="{Binding HasMoreFollowing, Converter={StaticResource BoolToVis}}"
+                                    Background="Transparent"
+                                    BorderBrush="{DynamicResource BorderBrush}"
+                                    BorderThickness="1"
+                                    Foreground="{DynamicResource LinkBrush}"
+                                    FontSize="11" Padding="8,4" Margin="0,4,0,0"
+                                    HorizontalAlignment="Left" Cursor="Hand"/>
+                        </StackPanel>
+                    </Grid>
 
                     <!-- Recent messages -->
                     <ItemsControl ItemsSource="{Binding Messages}">
@@ -434,7 +555,7 @@
                                             </DockPanel>
 
                                             <!-- Body -->
-                                            <TextBlock Text="{Binding Content}"
+                                            <TextBlock local:MentionText.Text="{Binding Content}"
                                                        FontSize="13"
                                                        Foreground="{DynamicResource TextBodyBrush}"
                                                        TextWrapping="Wrap"

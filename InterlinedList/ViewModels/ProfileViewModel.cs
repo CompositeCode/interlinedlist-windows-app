@@ -17,7 +17,23 @@ public partial class ProfileViewModel : ObservableObject
 
     public ObservableCollection<FollowUser> FollowRequests { get; } = new();
     public ObservableCollection<MessageItemViewModel> Messages { get; } = new();
-    public ObservableCollection<FollowUser> Mutuals { get; } = new();
+    /// <summary>
+    /// Mutual-follow counts. The API exposes counts only — there is no endpoint
+    /// listing the mutual users, so the old clickable chips could never work
+    /// (#160).
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasMutuals))]
+    [NotifyPropertyChangedFor(nameof(MutualsSummary))]
+    private MutualFollowCounts? mutuals;
+
+    /// <summary>The profile's followers, paged. Server default page is 50.</summary>
+    public ObservableCollection<FollowUser> Followers { get; } = new();
+
+    /// <summary>Who the profile follows, paged.</summary>
+    public ObservableCollection<FollowUser> Following { get; } = new();
+
+    private const int FollowPageSize = 25;
 
     [ObservableProperty]
     private string lookupUsername = "";
@@ -42,13 +58,41 @@ public partial class ProfileViewModel : ObservableObject
     private bool isLoading;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(FollowersHeader))]
+    private int followersTotal;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(FollowingHeader))]
+    private int followingTotal;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(LoadMoreFollowersCommand))]
+    private bool hasMoreFollowers;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(LoadMoreFollowingCommand))]
+    private bool hasMoreFollowing;
+
+    [ObservableProperty]
+    private bool isLoadingFollowLists;
+
+    /// <summary>
+    /// Removing a follower is only meaningful on your own profile — the endpoint
+    /// severs an edge pointing at you.
+    /// </summary>
+    [ObservableProperty]
+    private bool isOwnProfile;
+
+    [ObservableProperty]
     private string? errorMessage;
 
     public bool HasRequests => FollowRequests.Count > 0;
 
     public bool HasProfile => Profile is not null;
 
-    public bool HasMutuals => Mutuals.Count > 0;
+    public bool HasMutuals => Mutuals?.HasAny == true;
+
+    public string MutualsSummary => Mutuals?.Summary ?? string.Empty;
 
     public string FollowButtonText =>
         Relationship?.IsFollowing == true ? "Following"
@@ -63,7 +107,6 @@ public partial class ProfileViewModel : ObservableObject
     {
         _session = session;
         FollowRequests.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasRequests));
-        Mutuals.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasMutuals));
     }
 
     [RelayCommand]
@@ -93,14 +136,26 @@ public partial class ProfileViewModel : ObservableObject
     [RelayCommand]
     private async Task LoadProfileAsync()
     {
-        var username = LookupUsername.Trim().TrimStart('@');
-        if (string.IsNullOrWhiteSpace(username))
+        var typed = LookupUsername.Trim();
+        if (string.IsNullOrWhiteSpace(typed))
             return;
 
         IsLoading = true;
         try
         {
-            var profile = await _session.Api.GetProfileAsync(username);
+            // Resolve through the lookup endpoint first. It accepts a bare
+            // username only — a pasted "@adron" 404s — so this both strips the
+            // "@" users naturally type and turns "no such account" into a clear
+            // message instead of a raw 404 from the profile fetch.
+            var resolved = await _session.Api.LookupUserAsync(typed);
+            if (resolved is null)
+            {
+                Profile = null;
+                ErrorMessage = $"No account found for \u201c{typed}\u201d.";
+                return;
+            }
+
+            var profile = await _session.Api.GetProfileAsync(resolved.Username);
             Profile = profile;
 
             Relationship = await _session.Api.GetFollowStatusAsync(profile.Id);
@@ -112,9 +167,14 @@ public partial class ProfileViewModel : ObservableObject
             foreach (var message in page.Messages)
                 Messages.Add(new MessageItemViewModel(message, _session.Api, _session.CurrentUser?.Id));
 
-            Mutuals.Clear();
-            foreach (var mutual in await _session.Api.GetMutualAsync(profile.Id))
-                Mutuals.Add(mutual);
+            Mutuals = await _session.Api.GetMutualCountsAsync(profile.Id);
+
+            IsOwnProfile = profile.Id == _session.CurrentUser?.Id;
+
+            Followers.Clear();
+            Following.Clear();
+            await LoadMoreFollowersAsync();
+            await LoadMoreFollowingAsync();
 
             ErrorMessage = null;
         }
@@ -231,6 +291,118 @@ public partial class ProfileViewModel : ObservableObject
         {
             await _session.Api.RejectFollowAsync(user.Id);
             await LoadAsync();
+        }
+        catch (InterlinedApiException ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+    }
+    // ── Followers / following ───────────────────────────────────────────────
+    // Paged rather than one-shot: the server's default page is 50, so a user
+    // with more than that had the rest silently dropped. `total` comes from the
+    // pagination block and is shown in the header so the count is honest even
+    // before everything is loaded.
+
+    public string FollowersHeader => FollowersTotal > 0
+        ? $"FOLLOWERS ({Followers.Count} of {FollowersTotal})"
+        : "FOLLOWERS";
+
+    public string FollowingHeader => FollowingTotal > 0
+        ? $"FOLLOWING ({Following.Count} of {FollowingTotal})"
+        : "FOLLOWING";
+
+    [RelayCommand(CanExecute = nameof(CanLoadMoreFollowers))]
+    private async Task LoadMoreFollowersAsync()
+    {
+        if (Profile is null) return;
+
+        IsLoadingFollowLists = true;
+        try
+        {
+            var page = await _session.Api.GetFollowersPageAsync(
+                Profile.Id, FollowPageSize, Followers.Count);
+
+            foreach (var user in page.Users)
+                Followers.Add(user);
+
+            FollowersTotal = page.Total;
+            HasMoreFollowers = page.HasMore;
+            OnPropertyChanged(nameof(FollowersHeader));
+            ErrorMessage = null;
+        }
+        catch (InterlinedApiException ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsLoadingFollowLists = false;
+        }
+    }
+
+    private bool CanLoadMoreFollowers() => HasMoreFollowers;
+
+    [RelayCommand(CanExecute = nameof(CanLoadMoreFollowing))]
+    private async Task LoadMoreFollowingAsync()
+    {
+        if (Profile is null) return;
+
+        IsLoadingFollowLists = true;
+        try
+        {
+            var page = await _session.Api.GetFollowingPageAsync(
+                Profile.Id, FollowPageSize, Following.Count);
+
+            foreach (var user in page.Users)
+                Following.Add(user);
+
+            FollowingTotal = page.Total;
+            HasMoreFollowing = page.HasMore;
+            OnPropertyChanged(nameof(FollowingHeader));
+            ErrorMessage = null;
+        }
+        catch (InterlinedApiException ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsLoadingFollowLists = false;
+        }
+    }
+
+    private bool CanLoadMoreFollowing() => HasMoreFollowing;
+
+    /// <summary>
+    /// Sever a follower's edge to you. Two-step: <see cref="PendingRemoval"/>
+    /// arms it and the second press confirms, so an irreversible action isn't a
+    /// single mis-click — and without a modal, which would block the dispatcher.
+    /// </summary>
+    [ObservableProperty]
+    private FollowUser? pendingRemoval;
+
+    [RelayCommand]
+    private void ArmRemoveFollower(FollowUser follower) => PendingRemoval = follower;
+
+    [RelayCommand]
+    private void CancelRemoveFollower() => PendingRemoval = null;
+
+    [RelayCommand]
+    private async Task RemoveFollowerAsync(FollowUser follower)
+    {
+        if (follower is null || Profile is null) return;
+
+        try
+        {
+            await _session.Api.RemoveFollowerAsync(follower.Id);
+            PendingRemoval = null;
+
+            // Read-after-write: re-page from the start rather than mutating the
+            // local list, so the total and hasMore stay truthful.
+            Followers.Clear();
+            HasMoreFollowers = true;
+            await LoadMoreFollowersAsync();
+            ErrorMessage = null;
         }
         catch (InterlinedApiException ex)
         {

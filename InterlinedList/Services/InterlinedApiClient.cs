@@ -57,6 +57,30 @@ public sealed partial class InterlinedApiClient
             ?? throw new InterlinedApiException((int)resp.StatusCode, "GET /api/messages returned no body.");
     }
 
+    /// <summary>
+    /// Feed page via the documented keyset path, for use with
+    /// <see cref="CursorPager{T}"/>.
+    /// </summary>
+    /// <remarks>
+    /// <c>GET /api/messages</c> documents <c>limit</c>/<c>onlyMine</c>/<c>tag</c>/
+    /// <c>cursor</c>; <c>offset</c> still works but is no longer documented, so
+    /// <see cref="CursorRequest.ToQuery"/> sends the cursor when it has one and
+    /// falls back to offset for the first page. The cursor is carried verbatim.
+    /// </remarks>
+    public async Task<CursorPage<Message>> GetMessagesPageAsync(
+        CursorRequest request,
+        bool onlyMine = false,
+        string? tag = null,
+        CancellationToken ct = default)
+    {
+        var query = request.ToQuery();
+        if (onlyMine) query += "&onlyMine=true";
+        if (tag is { Length: > 0 }) query += $"&tag={Uri.EscapeDataString(tag)}";
+
+        var page = await GetJsonAsync<MessagesPage>($"api/messages?{query}", ct);
+        return new CursorPage<Message>(page.Messages, page.Pagination);
+    }
+
     public async Task PostMessageAsync(
         string content,
         bool publiclyVisible,
@@ -216,17 +240,50 @@ public sealed partial class InterlinedApiClient
 
         var body = await resp.Content.ReadAsStringAsync(ct);
         var message = body;
+        string? code = null;
         try
         {
             using var doc = JsonDocument.Parse(body);
             if (doc.RootElement.TryGetProperty("error", out var errorProp))
                 message = errorProp.GetString() ?? body;
+            // Every error body on this backend carries a stable machine-readable
+            // code next to the prose. Callers branch on it, so keep it.
+            if (doc.RootElement.TryGetProperty("code", out var codeProp))
+                code = codeProp.GetString();
         }
         catch (JsonException)
         {
             // Body wasn't JSON — surface the raw text.
         }
 
-        throw new InterlinedApiException((int)resp.StatusCode, message);
+        throw new InterlinedApiException((int)resp.StatusCode, message)
+        {
+            Code = code,
+            ResponseBody = body,
+            RetryAfter = ReadRetryAfter(resp),
+            RateLimitLimit = ReadIntHeader(resp, "RateLimit-Limit"),
+            RateLimitRemaining = ReadIntHeader(resp, "RateLimit-Remaining"),
+            RateLimitReset = ReadHeader(resp, "RateLimit-Reset"),
+        };
     }
+
+    private static TimeSpan? ReadRetryAfter(HttpResponseMessage resp)
+    {
+        // Retry-After is either delta-seconds or an HTTP-date (RFC 9110).
+        var retryAfter = resp.Headers.RetryAfter;
+        if (retryAfter is null) return null;
+        if (retryAfter.Delta is { } delta) return delta;
+        if (retryAfter.Date is { } date)
+        {
+            var wait = date - DateTimeOffset.UtcNow;
+            return wait > TimeSpan.Zero ? wait : TimeSpan.Zero;
+        }
+        return null;
+    }
+
+    private static string? ReadHeader(HttpResponseMessage resp, string name) =>
+        resp.Headers.TryGetValues(name, out var values) ? values.FirstOrDefault() : null;
+
+    private static int? ReadIntHeader(HttpResponseMessage resp, string name) =>
+        int.TryParse(ReadHeader(resp, name), out var parsed) ? parsed : null;
 }

@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -48,6 +49,47 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     private string deleteConfirmUsername = "";
 
+    // ── Server-side preferences (see #46) ───────────────────────────────────────
+    // These mirror the writable fields on PATCH /api/user/update. They are the
+    // *edit* surface; each one also has a consumption point elsewhere in the app
+    // that has to obey it, which is the other half of #46.
+
+    // ── Account standing (see #50) ──────────────────────────────────────────────
+    // Recomputed on every CurrentUser snapshot. Null until the first load; the
+    // banner is collapsed for a normal `active` account.
+    [ObservableProperty]
+    private AccountStatusViewModel? accountStatus;
+
+    [ObservableProperty]
+    private string theme = UserPreferenceOptions.ThemeSystem;
+
+    [ObservableProperty]
+    private string viewingPreference = UserPreferenceOptions.ViewingAllMessages;
+
+    [ObservableProperty]
+    private string maxMessageLength = "666";
+
+    [ObservableProperty]
+    private string messagesPerPage = "20";
+
+    [ObservableProperty]
+    private string notificationTrayLimit = "20";
+
+    [ObservableProperty]
+    private bool showPreviews;
+
+    [ObservableProperty]
+    private bool defaultPubliclyVisible;
+
+    [ObservableProperty]
+    private bool showAdvancedPostSettings;
+
+    [ObservableProperty]
+    private string latitude = "";
+
+    [ObservableProperty]
+    private string longitude = "";
+
     public SettingsViewModel(SessionService session)
     {
         _session = session;
@@ -72,10 +114,26 @@ public partial class SettingsViewModel : ObservableObject
     // Billing/subscription is cookie-session-only server-side, so the native app
     // hands off to the website (same pattern as OAuth linking).
     [RelayCommand]
-    private void OpenWebAccount()
+    private void OpenWebAccount() => OpenInBrowser(ApiConfig.BaseUrl);
+
+    /// <summary>
+    /// The account-status banner's call to action — verify your email, or appeal.
+    /// Both are browser handoffs: <c>POST /api/auth/send-verification-email</c> is
+    /// cookie-session-only per the OpenAPI spec (<c>x-auth-type: session</c>), so
+    /// a bearer-token client structurally can't trigger it, and there's no appeal
+    /// endpoint at all.
+    /// </summary>
+    [RelayCommand]
+    private void OpenAccountStatusAction()
+    {
+        if (AccountStatus?.ActionUrl is { Length: > 0 } url)
+            OpenInBrowser(url);
+    }
+
+    private static void OpenInBrowser(string url)
         => System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
         {
-            FileName = ApiConfig.BaseUrl,
+            FileName = url,
             UseShellExecute = true
         });
 
@@ -101,14 +159,8 @@ public partial class SettingsViewModel : ObservableObject
         IsBusy = true;
         try
         {
-            // Prefill profile fields from the current user.
-            var user = _session.CurrentUser;
-            if (user is not null)
-            {
-                DisplayName = user.DisplayName ?? "";
-                Bio = user.Bio ?? "";
-                IsPrivateAccount = user.IsPrivateAccount;
-            }
+            // Prefill profile + preference fields from the current user.
+            PrefillFromUser(_session.CurrentUser);
 
             var prefs = await _session.Api.GetNotificationPreferencesAsync();
             Preferences.Clear();
@@ -167,6 +219,7 @@ public partial class SettingsViewModel : ObservableObject
         try
         {
             await _session.Api.UpdateProfileAsync(DisplayName, Bio, IsPrivateAccount);
+            await RefreshCurrentUserAsync();
             ErrorMessage = null;
         }
         catch (InterlinedApiException ex)
@@ -177,6 +230,163 @@ public partial class SettingsViewModel : ObservableObject
         {
             IsBusy = false;
         }
+    }
+
+    // ── Preferences ─────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Writes the preference block, then re-reads GET /api/user so the rest of
+    /// the app sees the change immediately. The re-read is deliberate: the PATCH
+    /// 200 does return a user object, but a narrower one than GET (no
+    /// accountStatus/cleared/pendingEmail), so trusting it would blank state
+    /// other views depend on.
+    /// </summary>
+    [RelayCommand]
+    private async Task SavePreferencesAsync()
+    {
+        if (!TryParsePreferenceNumbers(out var maxLen, out var perPage, out var trayLimit)
+            || !TryParseCoordinates(out var lat, out var lon))
+        {
+            return; // ErrorMessage already set with the offending range.
+        }
+
+        IsBusy = true;
+        try
+        {
+            await _session.Api.UpdatePreferencesAsync(
+                theme: UserPreferenceOptions.NormalizeTheme(Theme),
+                maxMessageLength: maxLen,
+                messagesPerPage: perPage,
+                viewingPreference: UserPreferenceOptions.NormalizeViewingPreference(ViewingPreference),
+                showPreviews: ShowPreviews,
+                notificationTrayLimit: trayLimit,
+                defaultPubliclyVisible: DefaultPubliclyVisible,
+                showAdvancedPostSettings: ShowAdvancedPostSettings,
+                latitude: lat,
+                longitude: lon);
+
+            // Assigning CurrentUser raises PropertyChanged, which is what makes a
+            // theme change take effect without a restart (App listens for it).
+            await RefreshCurrentUserAsync();
+            ErrorMessage = "Preferences saved.";
+        }
+        catch (InterlinedApiException ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    /// <summary>Discards local edits and re-reads the server's values.</summary>
+    [RelayCommand]
+    private async Task ReloadPreferencesAsync()
+    {
+        IsBusy = true;
+        try
+        {
+            await RefreshCurrentUserAsync();
+            ErrorMessage = null;
+        }
+        catch (InterlinedApiException ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private async Task RefreshCurrentUserAsync()
+    {
+        _session.CurrentUser = await _session.Api.GetCurrentUserAsync();
+        PrefillFromUser(_session.CurrentUser);
+    }
+
+    private void PrefillFromUser(CurrentUser? user)
+    {
+        AccountStatus = new AccountStatusViewModel(user);
+        if (user is null) return;
+
+        DisplayName = user.DisplayName ?? "";
+        Bio = user.Bio ?? "";
+        IsPrivateAccount = user.IsPrivateAccount;
+
+        Theme = UserPreferenceOptions.NormalizeTheme(user.Theme);
+        ViewingPreference = UserPreferenceOptions.NormalizeViewingPreference(user.ViewingPreference);
+        // Show the *effective* paging values, not raw zeros, when the server
+        // hasn't set them — otherwise the boxes read "0" and a save would 400.
+        MaxMessageLength = (user.MaxMessageLength > 0 ? user.MaxMessageLength : 666).ToString(CultureInfo.InvariantCulture);
+        MessagesPerPage = user.EffectiveMessagesPerPage.ToString(CultureInfo.InvariantCulture);
+        NotificationTrayLimit = user.EffectiveNotificationTrayLimit.ToString(CultureInfo.InvariantCulture);
+        ShowPreviews = user.ShowPreviews;
+        DefaultPubliclyVisible = user.DefaultPubliclyVisible;
+        ShowAdvancedPostSettings = user.ShowAdvancedPostSettings;
+        Latitude = user.Latitude?.ToString(CultureInfo.InvariantCulture) ?? "";
+        Longitude = user.Longitude?.ToString(CultureInfo.InvariantCulture) ?? "";
+    }
+
+    // Validate client-side against the ranges the server itself enforces, so a
+    // typo surfaces inline instead of as a raw 400 from the API.
+    private bool TryParsePreferenceNumbers(out int maxLen, out int perPage, out int trayLimit)
+    {
+        maxLen = perPage = trayLimit = 0;
+
+        if (!TryParseRange(MaxMessageLength,
+                UserPreferenceOptions.MinMaxMessageLength, UserPreferenceOptions.MaxMaxMessageLength,
+                "Max message length", out maxLen))
+            return false;
+
+        if (!TryParseRange(MessagesPerPage,
+                UserPreferenceOptions.MinMessagesPerPage, UserPreferenceOptions.MaxMessagesPerPage,
+                "Messages per page", out perPage))
+            return false;
+
+        return TryParseRange(NotificationTrayLimit,
+            UserPreferenceOptions.MinNotificationTrayLimit, UserPreferenceOptions.MaxNotificationTrayLimit,
+            "Notification tray limit", out trayLimit);
+    }
+
+    private bool TryParseRange(string text, int min, int max, string label, out int value)
+    {
+        if (!int.TryParse(text?.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out value)
+            || value < min || value > max)
+        {
+            ErrorMessage = $"{label} must be a whole number between {min} and {max}.";
+            return false;
+        }
+
+        return true;
+    }
+
+    // Latitude/longitude are optional: blank clears nothing (the field is simply
+    // omitted from the PATCH) because sending null is a 500 server-side.
+    private bool TryParseCoordinates(out double? latitude, out double? longitude)
+    {
+        latitude = longitude = null;
+
+        if (!TryParseOptionalDegrees(Latitude, -90, 90, "Latitude", out latitude)) return false;
+        return TryParseOptionalDegrees(Longitude, -180, 180, "Longitude", out longitude);
+    }
+
+    private bool TryParseOptionalDegrees(string text, double min, double max, string label, out double? value)
+    {
+        value = null;
+        var trimmed = text?.Trim() ?? "";
+        if (trimmed.Length == 0) return true;
+
+        if (!double.TryParse(trimmed, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed)
+            || parsed < min || parsed > max)
+        {
+            ErrorMessage = $"{label} must be a number between {min} and {max}, or blank.";
+            return false;
+        }
+
+        value = parsed;
+        return true;
     }
 
     [RelayCommand]
@@ -252,7 +462,10 @@ public partial class SettingsViewModel : ObservableObject
         try
         {
             await _session.Api.DeleteAccountAsync(user.Username, user.Email);
-            _session.Logout();
+            // Local-only teardown on purpose: the account (and with it every
+            // sync-token it owned) is already gone, so POST /api/auth/logout and
+            // the session-revoke call would just be two 401s on the way out.
+            _session.ClearLocalSession();
             Navigator.RequestLogout();
         }
         catch (InterlinedApiException ex)
