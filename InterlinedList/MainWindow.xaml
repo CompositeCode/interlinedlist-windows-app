@@ -202,11 +202,33 @@
                                            FontSize="10" FontWeight="SemiBold"
                                            Foreground="{DynamicResource TextMutedBrush}"
                                            VerticalAlignment="Center"/>
-                                <Button Content="Mark all read"
-                                        Command="{Binding Notifications.MarkAllReadCommand}"
-                                        HorizontalAlignment="Right"
-                                        Style="{StaticResource DigBtnStyle}"/>
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                    <Button Content="See all"
+                                            Click="ShowAllNotifications_Click"
+                                            Style="{StaticResource DigBtnStyle}"
+                                            Margin="0,0,8,0"/>
+                                    <Button Content="Mark all read"
+                                            Command="{Binding Notifications.MarkAllReadCommand}"
+                                            Style="{StaticResource DigBtnStyle}"/>
+                                </StackPanel>
                             </Grid>
+
+                            <!-- Engagement totals. Hidden entirely when the
+                                 endpoint didn't answer, rather than showing
+                                 zeros that may not be zeros. -->
+                            <Border Margin="0,0,0,10"
+                                    Background="{DynamicResource Surface3Brush}"
+                                    BorderBrush="{DynamicResource BorderBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="4"
+                                    Padding="10,6"
+                                    Visibility="{Binding Notifications.HasEngagement, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Text="{Binding Notifications.EngagementSummary}"
+                                           FontFamily="JetBrains Mono, Consolas"
+                                           FontSize="10"
+                                           Foreground="{DynamicResource TextBodyBrush}"
+                                           TextWrapping="Wrap"/>
+                            </Border>
 
                             <ItemsControl ItemsSource="{Binding Notifications.Items}">
                                 <ItemsControl.ItemTemplate>

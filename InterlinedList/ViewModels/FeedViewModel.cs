@@ -90,6 +90,20 @@ public partial class FeedViewModel : ObservableObject
         AttachedVideoUrls.CollectionChanged += (_, _) => PostCommand.NotifyCanExecuteChanged();
     }
 
+    /// <summary>
+    /// Wrap a wire message for the feed. Centralized so every card is hooked to
+    /// <see cref="MessageItemViewModel.Posted"/> — a Push or Quote publishes a new
+    /// post, and the write response isn't parsed, so the feed re-fetches.
+    /// </summary>
+    private MessageItemViewModel Wrap(Models.Message message)
+    {
+        var item = new MessageItemViewModel(message, _session.Api, _session.CurrentUser?.Id);
+        item.Posted += OnItemPosted;
+        return item;
+    }
+
+    private void OnItemPosted(object? sender, EventArgs e) => RefreshCommand.Execute(null);
+
     [RelayCommand]
     private async Task AttachImageAsync()
     {
@@ -189,7 +203,7 @@ public partial class FeedViewModel : ObservableObject
             var scheduled = await _session.Api.GetScheduledMessagesAsync();
             ScheduledMessages.Clear();
             foreach (var m in scheduled)
-                ScheduledMessages.Add(new MessageItemViewModel(m, _session.Api, _session.CurrentUser?.Id));
+                ScheduledMessages.Add(Wrap(m));
             ErrorMessage = null;
         }
         catch (InterlinedApiException ex)
@@ -225,7 +239,7 @@ public partial class FeedViewModel : ObservableObject
 
             Messages.Clear();
             foreach (var message in page.Messages)
-                Messages.Add(new MessageItemViewModel(message, _session.Api, _session.CurrentUser?.Id));
+                Messages.Add(Wrap(message));
 
             HasMore = page.Pagination.HasMore;
             _offset = page.Messages.Count;
@@ -252,7 +266,7 @@ public partial class FeedViewModel : ObservableObject
             var page = await _session.Api.GetMessagesAsync(limit: PageSize, offset: _offset);
 
             foreach (var message in page.Messages)
-                Messages.Add(new MessageItemViewModel(message, _session.Api, _session.CurrentUser?.Id));
+                Messages.Add(Wrap(message));
 
             _offset += page.Messages.Count;
             HasMore = page.Pagination.HasMore;

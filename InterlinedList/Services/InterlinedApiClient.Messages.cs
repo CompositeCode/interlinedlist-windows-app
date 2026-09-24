@@ -36,6 +36,50 @@ public sealed partial class InterlinedApiClient
     public Task PostReplyAsync(string parentId, string content, bool publiclyVisible, CancellationToken ct = default)
         => PostMessageAsync(content, publiclyVisible, parentId: parentId, ct: ct);
 
+    // ── Push (repost) / Quote ───────────────────────────────────────────────────
+
+    /// <summary>
+    /// <c>POST /api/messages</c> from a <see cref="NewMessage"/>. An overload of the
+    /// long positional <c>PostMessageAsync</c> in InterlinedApiClient.cs that can
+    /// also send <c>pushedMessageId</c>. Optional keys the caller didn't set are
+    /// omitted rather than sent as explicit nulls.
+    /// </summary>
+    public Task PostMessageAsync(NewMessage draft, CancellationToken ct = default)
+    {
+        var body = new Dictionary<string, object?>
+        {
+            ["content"] = draft.Content,
+            ["publiclyVisible"] = draft.PubliclyVisible,
+            ["crossPostToBluesky"] = draft.CrossPostToBluesky,
+            ["crossPostToTwitter"] = draft.CrossPostToTwitter,
+            ["crossPostToLinkedIn"] = draft.CrossPostToLinkedIn,
+        };
+        if (draft.MastodonProviderIds is { Length: > 0 } mastodon) body["mastodonProviderIds"] = mastodon;
+        if (draft.ParentId is { Length: > 0 } parent) body["parentId"] = parent;
+        if (draft.PushedMessageId is { Length: > 0 } pushed) body["pushedMessageId"] = pushed;
+        if (draft.ScheduledAt is { } at) body["scheduledAt"] = at.UtcDateTime;
+        if (draft.ImageUrls is { Count: > 0 } images) body["imageUrls"] = images;
+        if (draft.VideoUrls is { Count: > 0 } videos) body["videoUrls"] = videos;
+
+        return SendVoidAsync(HttpMethod.Post, "api/messages", body, ct);
+    }
+
+    /// <summary>
+    /// Push (repost) a message as-is, with no commentary. Always public — pushes
+    /// and quotes are public by product rule (<c>/help/messages</c>), regardless of
+    /// the user's <c>defaultPubliclyVisible</c> preference.
+    /// </summary>
+    public Task PushMessageAsync(string messageId, CancellationToken ct = default)
+        => PostMessageAsync(new NewMessage { Content = "", PubliclyVisible = true, PushedMessageId = messageId }, ct);
+
+    /// <summary>
+    /// Quote a message — a push carrying your own note. Same endpoint and same
+    /// <c>pushedMessageId</c> field as <see cref="PushMessageAsync"/>; non-empty
+    /// content is the only thing that distinguishes the two. Always public.
+    /// </summary>
+    public Task QuoteMessageAsync(string messageId, string content, CancellationToken ct = default)
+        => PostMessageAsync(new NewMessage { Content = content, PubliclyVisible = true, PushedMessageId = messageId }, ct);
+
     public Task EditMessageAsync(string id, string content, CancellationToken ct = default)
         => SendVoidAsync(HttpMethod.Patch, $"api/messages/{id}", new { content }, ct);
 

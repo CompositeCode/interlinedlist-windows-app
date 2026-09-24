@@ -29,8 +29,13 @@ public partial class App : Application
         try
         {
             base.OnStartup(e);
+
+            // Before a session exists there is no server preference to honor, so
+            // the OS setting is the whole answer. ApplyEffectiveTheme takes over
+            // the moment CurrentUser lands (below, and on every later login).
             ApplyTheme(IsSystemDarkMode());
             SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
+            AppServices.Session.PropertyChanged += OnSessionPropertyChanged;
 
             bool restored;
             try
@@ -47,7 +52,20 @@ public partial class App : Application
                 restored = false;
             }
 
-            if (restored)
+            if (restored && IsAccountClosed())
+            {
+                // A saved token whose account has since been banned. The shell
+                // would come up looking functional and then 403 on everything,
+                // so drop the session instead and let the login screen surface
+                // the server's own rejection when they try again (#50).
+                AppLog.Info("Restored session belongs to a closed account; discarding it and showing login.");
+                // ClearLocalSession, not LogoutAsync: the account is closed, so
+                // there is no useful server call to make — and both call sites are
+                // synchronous. LogoutAsync is for a user-initiated sign-out.
+                AppServices.Session.ClearLocalSession();
+                ShowLoginWindow();
+            }
+            else if (restored)
             {
                 AppLog.Info("Session restored; showing main window.");
                 ShowMainWindow();
@@ -111,12 +129,35 @@ public partial class App : Application
         var login = new LoginWindow();
         login.LoginSucceeded += (_, _) =>
         {
+            // Belt-and-braces: the server should reject a closed account's
+            // sign-in outright, but if a token is ever minted for one, don't
+            // open a shell that 403s on every action. The login window stays
+            // up rather than being replaced by a broken one (#50).
+            if (IsAccountClosed())
+            {
+                AppLog.Info("Sign-in produced a closed account; refusing to open the shell.");
+                // ClearLocalSession, not LogoutAsync: the account is closed, so
+                // there is no useful server call to make — and both call sites are
+                // synchronous. LogoutAsync is for a user-initiated sign-out.
+                AppServices.Session.ClearLocalSession();
+                return;
+            }
+
             ShowMainWindow();
             login.Close();
         };
         MainWindow = login;
         login.Show();
     }
+
+    /// <summary>
+    /// A <c>banned</c> account is closed and cannot sign in — the one
+    /// <c>accountStatus</c> the app must refuse rather than merely annotate.
+    /// <c>restricted</c> and <c>suspended</c> deliberately do NOT land here:
+    /// per the product docs those accounts can still sign in, read and browse,
+    /// and get the read-only status banner instead.
+    /// </summary>
+    private static bool IsAccountClosed() => AppServices.Session.CurrentUser?.IsBanned == true;
 
     private void ShowMainWindow()
     {
@@ -133,13 +174,40 @@ public partial class App : Application
     protected override void OnExit(ExitEventArgs e)
     {
         SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
+        AppServices.Session.PropertyChanged -= OnSessionPropertyChanged;
         base.OnExit(e);
     }
 
+    // ── Theme: explicit server preference > OS setting (#46) ───────────────────
+
     private void OnUserPreferenceChanged(object sender, UserPreferenceChangedEventArgs e)
     {
+        // The OS listener stays wired, but it no longer decides on its own: if
+        // the account pinned light/dark, flipping Windows' theme must not move
+        // the app. ApplyEffectiveTheme re-resolves the precedence either way.
         if (e.Category == UserPreferenceCategory.General)
-            Dispatcher.Invoke(() => ApplyTheme(IsSystemDarkMode()));
+            Dispatcher.Invoke(ApplyEffectiveTheme);
+    }
+
+    private void OnSessionPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        // Fires on session restore, on login, and on the settings screen's
+        // read-after-write refresh — i.e. every moment the server's `theme`
+        // could have changed under us.
+        if (e.PropertyName == nameof(Services.SessionService.CurrentUser))
+            Dispatcher.Invoke(ApplyEffectiveTheme);
+    }
+
+    /// <summary>
+    /// Resolves the account's <c>theme</c> preference against the OS setting and
+    /// applies the result. <c>light</c>/<c>dark</c> win outright; <c>system</c>
+    /// — and any other value, since the server does not validate this field —
+    /// follows Windows.
+    /// </summary>
+    internal void ApplyEffectiveTheme()
+    {
+        var serverTheme = AppServices.Session.CurrentUser?.Theme;
+        ApplyTheme(ViewModels.UserPreferenceOptions.ResolveDark(serverTheme, IsSystemDarkMode()));
     }
 
     internal void ApplyTheme(bool dark)
