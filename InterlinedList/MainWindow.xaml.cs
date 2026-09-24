@@ -29,6 +29,13 @@ public partial class MainWindow : Window
         // Account deletion (Settings) routes back to the login screen through here.
         Navigator.OnLoggedOut = () => LoggedOut?.Invoke(this, EventArgs.Empty);
 
+        // Notification click-through. The server hands us a structured target
+        // ({messageId, listId, orgId}), so each kind gets a real destination.
+        Navigator.OnOpenMessage = OpenMessage;
+        Navigator.OnOpenList = _ => ShowCenter("Lists");
+        Navigator.OnOpenOrganization = _ => ShowCenter("Organizations");
+        Navigator.OnOpenConnectedAccounts = () => ShowCenter("Accounts");
+
         StartClock();
 
         _ = Notifications.LoadCommand.ExecuteAsync(null);
@@ -75,6 +82,30 @@ public partial class MainWindow : Window
         view.LoadProfile(username);
     }
 
+    /// <summary>Swap the center column to a tab, as a nav click would.</summary>
+    private void ShowCenter(string tag)
+    {
+        NotificationsRail.Visibility = Visibility.Collapsed;
+        ProfileRail.Visibility = Visibility.Visible;
+        CenterContent.Content = ViewFor(tag);
+    }
+
+    // Notification → a specific message. The Feed is where messages live; a
+    // dedicated single-message thread view is #35, so for now this opens the
+    // Feed rather than pretending to deep-link. Deliberately not parsing the
+    // server's `routePath`, which is a web URL.
+    private void OpenMessage(string messageId) => ShowCenter("Feed");
+
+    /// <summary>"See all" in the Alerts rail → the full notification history.</summary>
+    private void ShowAllNotifications_Click(object sender, RoutedEventArgs e)
+    {
+        NotificationsRail.Visibility = Visibility.Collapsed;
+        ProfileRail.Visibility = Visibility.Visible;
+        var view = (Views.NotificationsView)ViewFor("Notifications");
+        CenterContent.Content = view;
+        view.Refresh();
+    }
+
     private UserControl ViewFor(string tag)
     {
         if (_views.TryGetValue(tag, out var existing)) return existing;
@@ -90,6 +121,9 @@ public partial class MainWindow : Window
             "Search" => new SearchView(),
             "Accounts" => new ConnectedAccountsView(),
             "Settings" => new SettingsView(),
+            // Shares the shell's NotificationsViewModel with the Alerts rail so
+            // read state and the unread count can't diverge between the two.
+            "Notifications" => new NotificationsView(Notifications),
             _ => new FeedView(),
         };
 
