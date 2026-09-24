@@ -340,7 +340,7 @@
                               Padding="16,12">
                     <ItemsControl ItemsSource="{Binding RootDocuments}">
                         <ItemsControl.ItemTemplate>
-                            <DataTemplate DataType="{x:Type models:DocumentSummary}">
+                            <DataTemplate DataType="{x:Type models:DocumentFolderEntry}">
                                 <Border Margin="0,0,0,8"
                                         Background="{DynamicResource Surface2Brush}"
                                         BorderBrush="{DynamicResource BorderBrush}"
@@ -434,6 +434,10 @@
                     Margin="20,0,20,20"
                     Padding="16,12">
                 <StackPanel>
+                    <!-- Invite people by email — leads the Share card, as the web does
+                         (inviting keeps the document private; links are secondary). -->
+                    <local:InvitePanel Kind="Document" TargetId="{Binding SelectedDocument.Id}" Margin="0,0,0,12"/>
+
                     <DockPanel Margin="0,0,0,8">
                         <TextBlock DockPanel.Dock="Left"
                                    Text="Share"

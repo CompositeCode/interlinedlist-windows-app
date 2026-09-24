@@ -17,5 +17,6 @@ public partial class FeedView : UserControl
 
         _ = ViewModel.RefreshCommand.ExecuteAsync(null);
         _ = ViewModel.LoadCrossPostOptionsCommand.ExecuteAsync(null);
+        _ = ViewModel.LoadTrendingTagsCommand.ExecuteAsync(null);
     }
 }

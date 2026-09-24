@@ -1,0 +1,140 @@
+<UserControl x:Class="InterlinedList.Views.NotificationsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:InterlinedList.ViewModels"
+             xmlns:local="clr-namespace:InterlinedList.Views"
+             Background="{DynamicResource AppBgBrush}">
+
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+        <local:NullOrEmptyToVisibilityConverter x:Key="NullOrEmptyToVis"/>
+    </UserControl.Resources>
+
+    <Grid Margin="20,16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <DockPanel Grid.Row="0" Margin="0,0,0,4">
+            <Button DockPanel.Dock="Right"
+                    Content="Mark all read"
+                    Command="{Binding MarkAllReadCommand}"
+                    Background="Transparent"
+                    BorderBrush="{DynamicResource BorderBrush}"
+                    BorderThickness="1"
+                    Foreground="{DynamicResource LinkBrush}"
+                    FontSize="11" Padding="8,4" Cursor="Hand"/>
+            <TextBlock Text="NOTIFICATIONS"
+                       FontSize="10" FontWeight="SemiBold"
+                       Foreground="{DynamicResource TextMutedBrush}"
+                       VerticalAlignment="Center"/>
+        </DockPanel>
+
+        <TextBlock Grid.Row="1"
+                   Text="Every notification, newest first. Clicking one marks it read and opens what it's about."
+                   FontSize="11"
+                   Foreground="{DynamicResource TextMutedBrush}"
+                   TextWrapping="Wrap"
+                   Margin="0,0,0,12"/>
+
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+                <TextBlock Text="{Binding ErrorMessage}"
+                           Foreground="#FFE81123"
+                           FontSize="12"
+                           TextWrapping="Wrap"
+                           Margin="0,0,0,8"
+                           Visibility="{Binding ErrorMessage, Converter={StaticResource NullOrEmptyToVis}}"/>
+
+                <TextBlock Text="Nothing here yet."
+                           FontSize="12"
+                           Foreground="{DynamicResource TextMutedBrush}"
+                           Margin="0,8"
+                           Visibility="{Binding FeedIsEmpty, Converter={StaticResource BoolToVis}}"/>
+
+                <ItemsControl ItemsSource="{Binding FeedItems}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type vm:NotificationItemViewModel}">
+                            <!-- The whole row is the click target when it leads
+                                 somewhere; an unrecognized destination stays
+                                 inert rather than pretending to navigate. -->
+                            <Button Command="{Binding DataContext.ActivateCommand,
+                                              RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                    CommandParameter="{Binding}"
+                                    IsEnabled="{Binding IsNavigable}"
+                                    ToolTip="{Binding NavigationHint}"
+                                    Background="Transparent" BorderThickness="0"
+                                    Padding="0" Margin="0,0,0,8"
+                                    HorizontalContentAlignment="Stretch"
+                                    Cursor="Hand">
+                                <Border Background="{DynamicResource SurfaceBrush}"
+                                        BorderBrush="{DynamicResource BorderBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="4">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="4"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <!-- Amber edge while unread, matching
+                                             the Dug-post convention. -->
+                                        <Border Grid.Column="0" CornerRadius="4,0,0,4">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Setter Property="Background" Value="{StaticResource TealBrush}"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsUnread}" Value="True">
+                                                            <Setter Property="Background" Value="{StaticResource AmberBrush}"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+                                        </Border>
+
+                                        <StackPanel Grid.Column="1" Margin="12,10">
+                                            <DockPanel Margin="0,0,0,4">
+                                                <TextBlock Text="{Binding TimeFormatted}"
+                                                           DockPanel.Dock="Right"
+                                                           FontFamily="JetBrains Mono, Consolas"
+                                                           FontSize="9"
+                                                           Foreground="{DynamicResource TextMutedBrush}"
+                                                           VerticalAlignment="Top"/>
+                                                <TextBlock Text="{Binding Title}"
+                                                           FontSize="12" FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource TextBrush}"
+                                                           TextWrapping="Wrap"/>
+                                            </DockPanel>
+                                            <TextBlock Text="{Binding Body}"
+                                                       FontSize="11"
+                                                       Foreground="{DynamicResource TextBodyBrush}"
+                                                       TextWrapping="Wrap"
+                                                       MaxHeight="52"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                            </Button>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <!-- No offset on this endpoint, so "load more" asks for a
+                     larger limit and re-renders. -->
+                <Button Content="Load more"
+                        Command="{Binding LoadMoreFeedCommand}"
+                        Visibility="{Binding FeedMayHaveMore, Converter={StaticResource BoolToVis}}"
+                        Background="Transparent"
+                        BorderBrush="{DynamicResource BorderBrush}"
+                        BorderThickness="1"
+                        Foreground="{DynamicResource LinkBrush}"
+                        FontSize="11" Padding="10,5"
+                        HorizontalAlignment="Left" Cursor="Hand"
+                        Margin="0,4,0,16"/>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</UserControl>
