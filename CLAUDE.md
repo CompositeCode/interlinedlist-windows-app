@@ -47,6 +47,8 @@ InterlinedList/
     InterlinedApiClient.CrossPost.cs     (partial class: linked-identity/OAuth helpers)
     InterlinedApiException.cs
     CredentialStore.cs            (DPAPI-encrypted sync-token persistence)
+    AppLog.cs                     (file + Windows Event Log diagnostics; wired to global
+                                   crash handlers in App.xaml.cs — see Logging below)
     SessionService.cs             (login/logout/restore, exposes CurrentUser)
     AppServices.cs                 (process-lifetime singletons: Api, Session)
   ViewModels/                    (CommunityToolkit.Mvvm ObservableObject + [RelayCommand])
@@ -58,6 +60,20 @@ InterlinedList/
                                    `DataContext = new XyzViewModel(AppServices.Session)` in its
                                    own constructor, not injected by MainWindow)
     FeedView, ListsView, DocumentsView, OrganizationsView, SearchView, ConnectedAccountsView
+InterlinedList.Sync.Core/          (net10.0, PLATFORM-NEUTRAL — builds & unit-tests on macOS)
+  SyncEngine.cs                     (bidirectional pull/push; folder-tree materialization)
+  SqliteSyncStateStore.cs           (SQLite state.db: doc/folder↔path ledger + delta cursor)
+  FileMapper.cs / PathSanitizer.cs  (folderId→subdir mapping, filename safety, conflict paths)
+  ConflictResolver.cs               (server-wins truth table → .conflict-<ts>.md)
+  HttpDocumentSyncClient.cs         (the ~7 documents endpoints, incl. GET /api/documents/sync)
+  Abstractions.cs / Models.cs       (IDocumentSyncClient, ICredentialSource, ISyncStateStore, DTOs)
+InterlinedList.Sync/               (net10.0-windows WinExe — the system-tray background agent)
+  Program.cs / TrayApplication.cs   (Hardcodet NotifyIcon tray, menu, no main window)
+  SyncCoordinator.cs / FolderWatcher.cs (poll loop + FileSystemWatcher, all engine calls gated)
+  DpapiCredentialSource.cs          (reads the SAME session.dat the main app writes)
+  AutoStartManager.cs / SyncLog.cs  (HKCU Run toggle; file + Event Log diagnostics)
+  SignInWindow.cs / SettingsWindow.cs (code-only WPF dialogs)
+InterlinedList.Sync.Core.Tests/    (xUnit — 38 tests, run on macOS/CI)
 installer/
   InterlinedList.Installer.wixproj  (WiX v5 SDK project → classic .msi)
   Package.wxs                       (product/feature/shortcut definition)
@@ -68,11 +84,66 @@ InterlinedList.Package/
   Images/                           (tile/splash assets generated from brand-kit logo)
 ```
 
+## Document synchronization utility (Obsidian sync)
+
+A background **system-tray** utility (`InterlinedList.Sync`) keeps a local folder of
+`.md` files bidirectionally in sync with the user's InterlinedList **documents**, so a
+tool like **Obsidian** can edit them. It's installed and auto-started *with* the main
+app (see Packaging). Design decisions and the full plan live in `synch-plan.md`.
+
+- **Two projects, deliberate split.** `InterlinedList.Sync.Core` is `net10.0`
+  **platform-neutral** (no WPF, no DPAPI) so the engine builds and unit-tests on
+  macOS/CI. `InterlinedList.Sync` is the `net10.0-windows` WPF tray host that owns all
+  Windows-only concerns (tray UI, DPAPI token read, `FileSystemWatcher`, HKCU autostart).
+- **Vendored-from, not referenced.** The engine's design is ported from the sibling
+  repo `CompositeCode/interlinedlist-synchronization` (`windows/`, MIT), but rebuilt to
+  this repo's conventions and extended with **folder-tree mirroring** (that repo is flat).
+  It does **not** reference the WPF app — it has its own minimal `HttpDocumentSyncClient`.
+- **Unified auth = shared token, not shared code.** The utility reads the SAME
+  DPAPI-encrypted `%LocalAppData%\InterlinedList\session.dat` the main app writes
+  (`DpapiCredentialSource`), so signing in once in either place works for both. Its own
+  sign-in (`AuthClient`) writes back to that same file.
+- **Sync model.** Pull = `GET /api/documents/sync?lastSyncAt=` delta; folders become real
+  subdirectories; server wins conflicts (local kept as `<stem>.conflict-<ts>.md`). Push =
+  `FileSystemWatcher` (500ms debounce) → create/update/delete, creating server folders on
+  demand. A **full-snapshot reconcile every 20th poll** covers the API's unreliable delete
+  tombstones. Its own SQLite `state.db` (not the app's — separate process) is the ledger;
+  **all engine calls are serialized through one gate** (the SQLite connection isn't
+  thread-safe). **Load-bearing risk:** moving a doc between folders pushes `folderId` on
+  `PATCH /api/documents/{id}`, which is **not yet live-verified** — see `synch-plan.md`.
+- **Not a Windows Service** — a per-user login-launched tray process (session-0 services
+  can't show a tray icon or read the per-user DPAPI token).
+
+## Logging & diagnostics
+
+Both processes log to disk and best-effort to the **Windows Event Log** (Event Viewer →
+Windows Logs → Application), so an installed build that fails to start is diagnosable
+rather than silent:
+
+- **Main app:** `Services/AppLog.cs` → `%LocalAppData%\InterlinedList\logs\app-*.log`,
+  Event Log source `InterlinedList`. `App.xaml.cs` installs global handlers
+  (`DispatcherUnhandledException`, `AppDomain.UnhandledException`,
+  `TaskScheduler.UnobservedTaskException`), wraps `OnStartup`, and shows a dialog pointing
+  at the log on a startup failure. **This fixed a real "installs but won't run" crash:**
+  `SessionService.TryRestoreSessionAsync` only caught `InterlinedApiException`, so a
+  network/timeout/JSON error while validating a saved token escaped the `async void`
+  `OnStartup` and killed the process before any window showed — now caught, logged, and it
+  falls back to the login window.
+- **Sync utility:** `SyncLog.cs` → `%LocalAppData%\InterlinedList\sync\logs\sync-*.log`,
+  Event Log source `InterlinedListSync`.
+- **Event Log sources are created by the MSI** (elevated); the apps run `asInvoker` and
+  can only *write* to an existing source, so file logging is the always-available fallback.
+
 ## API integration
 
 The app talks to the real InterlinedList backend at `https://interlinedlist.com`
-(154-endpoint REST API, OpenAPI spec at `/api/openapi.json`) — there is no mock
-data layer. Auth is a long-lived bearer token from `POST /api/auth/sync-token`
+(OpenAPI spec at `/api/openapi.json` — **233 paths / 304 operations** as of
+2026-09-15, of which **259 are in scope** for a client once admin/cron/webhooks
+are excluded; the app implements **115**). There is no mock data layer.
+**The spec grows quickly** — it was 189 paths / 244 operations on 2026-08-01, so
+re-read it rather than trusting any count written here.
+
+Auth is a long-lived bearer token from `POST /api/auth/sync-token`
 (the same mechanism the `il-sync` CLI and other native clients use — no cookie
 jar), persisted DPAPI-encrypted via `CredentialStore`. The token is
 long-lived, so treat `%LocalAppData%\InterlinedList\session.dat` as a standing
@@ -90,36 +161,98 @@ notifications tray with **mark-one-read / delete-one / mark-all**; **Direct
 Messages** (recipient list + thread + send); **People** (profile lookup,
 follow/unfollow, follow-request approve/reject, a user's messages,
 **block/mute/report**); **Lists** (browse/create/delete, freeform JSON data
-rows with **row edit + delete** — no schema/column editor, see below);
+rows with **row edit + delete** — no schema/column editor yet, see below);
 **Documents** (root docs, templates, create/edit/delete + **folder CRUD /
 new-doc-in-folder**); **Organizations** (browse + create + **full member
 management**: add via search, change role, remove, edit/delete org);
 **Settings** (profile edit, avatar-from-URL, email change, notification
 preferences, blocked/muted management, **API-session list + revoke**, **CSV
 data export**); unified **Search**; and **Connected Accounts** (Bluesky/
-Mastodon/LinkedIn/Twitter linking + cross-post toggles). Still not built:
-Stripe billing UI, register/forgot-password, GitHub issue sync (endpoints work
-but the test account has no GitHub linked), per-list schema/column definitions,
-LinkedIn per-page posting targets, scheduled-post UI (the service supports
-`scheduledAt`), media *video* upload, list watchers/sharing, document sharing/
-collaborators, Materialize ("Create from…"), and account deletion UI (the
-service method exists, intentionally unsurfaced).
+Mastodon/LinkedIn/Twitter linking + cross-post toggles).
+
+**Not built — see the parity backlog (GitHub issues #8–#128, 19 epics).** The
+big ones are whole product pillars the app has nothing for:
+
+- **AI Writing Assistance** (`/api/ai/*`) — writing assist, message/article
+  series, Powered Templates, Powered Document. Subscriber-gated, bearer-OK.
+- **Application Settings & Devices** (`/api/user/app-settings/*`) — ten
+  endpoints built so native clients sync their own prefs across machines. This
+  app is the intended consumer.
+- **Tags** (`/api/tags/*`) — trending + prefix autocomplete, `tags` on posts.
+- **List schema / typed columns**, **"Create from…" (Materialize)**,
+  **GitHub-backed lists**, **list folders** (`/api/folders`, distinct from
+  document folders), **list saved views**, **email invites** for lists and
+  documents, **Push/Quote**, **link preview cards**, **message permalinks**,
+  **DM Inbox/Sent/Deleted**, and the **dashboard/widgets** surface.
+
+Also missing and cheap: `Models/CurrentUser.cs` drops 14 preference fields
+`GET /api/user` returns (including `accountStatus`), so the app silently
+ignores preferences set on the web; `Models/Message.cs` drops 9 live fields;
+`Models/NotificationPreference.cs` omits the `email` channel the API returns.
 
 **Load-bearing constraints discovered by live-probing the API — don't
 "fix" these without re-verifying, they're not bugs in this app:**
 
-1. **A few endpoints only accept cookie-session auth, not the bearer
-   sync-token.** Re-probed live 2026-07-31 with the test account:
-   `GET /api/user/engagement` and `GET/PUT /api/user/dashboard-layout` return
-   `401` with a valid bearer token (Stripe billing + some `/api/auth/*` session
-   flows are the same shape). A native bearer-token client structurally can't
-   get a cookie session, so those are either browser-handoff (like OAuth) or
-   out of scope. **Correction to an earlier claim:** `GET
-   /api/organizations/{id}/members`, `GET /api/linkedin/targets`, and
-   `GET /api/linkedin/posting-targets` were *previously* documented here as
-   `401`-walled, but as of 2026-07-31 they return `200` with the bearer token —
-   member-management and LinkedIn per-page targeting **are** buildable now.
-   (Member *mutations* — POST/PUT/DELETE — still need live write-verification.)
+1. **⚠️ The auth model per endpoint drifts — always re-probe, never trust a
+   claim written here (including this one).** The spec's declared `security` is
+   **not authoritative**: `/api/user/engagement` and `/api/user/dashboard-layout`
+   both declare bearer-or-cookie, yet behaved as cookie-only on 2026-07-31 and
+   as bearer-OK on 2026-09-15. Two full rounds of corrections have now been
+   needed here, so treat the list below as a dated snapshot, not a rule.
+
+   **⚠️ `POST /api/auth/logout` does NOT invalidate a bearer sync-token.**
+   Probed live 2026-09-16 (#114): it returns `200 {"message":"Logged out
+   successfully","remaining":0}` — and returns exactly that **with no
+   `Authorization` header at all**. The spec agrees: `x-auth-type: "none"`,
+   `security: []`. After five logout calls the same token still returned `200`
+   from `GET /api/user`, and its row stayed in `GET /api/user/sessions` with a
+   freshly bumped `lastUsedAt`. `remaining` counts *cookie* sessions, always 0
+   for a native client.
+   The real revoke is `DELETE /api/user/sessions/{id}` (`204`, after which the
+   token 401s and its row disappears) — but exactly one row comes back
+   `isCurrent: true`, and deleting that one returns
+   `400 {"error":"cannot_revoke_current_session"}`. **So a native bearer client
+   structurally cannot invalidate its own token.** Destroying `session.dat` is
+   therefore sign-out's only real guarantee, which is why `ClearToken()`
+   overwrites before deleting. The stale-token pile on the test account is now
+   **1,283** (it was 502 on 2026-07-31) — a concrete consequence.
+
+   **Cookie-session-only, confirmed live 2026-09-15** (a native bearer-token
+   client structurally cannot get a cookie session, so these are browser-handoff
+   or out of scope): `GET /api/auth/accounts`, `POST /api/auth/switch`,
+   `POST /api/auth/remove-account`, `POST /api/auth/send-verification-email`,
+   `POST /api/stripe/create-checkout-session`,
+   `POST /api/stripe/create-portal-session`,
+   `/api/architecture-aggregates/*`, and all of `/api/admin/*`.
+
+   **Bearer-OK as of 2026-09-15, previously documented here as `401`-walled —
+   these corrections are the point:**
+   - `GET /api/user/engagement` → `200` (totals + a recent feed).
+   - `GET`/`PUT /api/user/dashboard-layout` → `200 {"layout":null}`; same for
+     `/api/user/front-wall-layout`.
+   - `GET /api/organizations/{id}/members`, `GET /api/linkedin/targets`,
+     `GET /api/linkedin/posting-targets` → `200` (corrected 2026-07-31).
+   - `GET /api/github/repos` and `/api/github/orgs` → `200 []`. The earlier
+     "every `/api/github/*` call returns 'GitHub account not linked'" claim was
+     wrong — the whole GitHub surface is buildable.
+     **But don't read those empty arrays as "nothing is linked."** The test
+     account *is* GitHub-linked (`GET /api/user/identities` shows provider
+     `github`, username `InterlinedListMessenger`) — the arrays are empty
+     because that GitHub account owns no repos and joins no orgs. So the
+     genuinely-unlinked response shape is **still unobserved**, and link state
+     must be read from `/api/user/identities` (consistent with constraint 2
+     below), never inferred from an empty collection.
+     Two more live facts worth having: `GET /api/github/repos` needs an
+     **`?org=`** to return anything (`?org=github` → 559 repos in one bare
+     array — the server walks GitHub's pages itself, so **no client paging**,
+     with an apparent 2000 cap), and `?org=<a *user* rather than an org>`
+     returns `404`. `GET /api/github/issues` without `?repo=owner/repo` and
+     without a `githubDefaultRepo` returns `400 "Repository required…"`.
+   - `/api/ai/*`, `/api/tags/*`, `/api/user/app-settings/*`, `/api/limits`,
+     `/api/link-metadata`, `/api/documents/tree`, `/api/folders`,
+     `/api/lists/{id}/schema|views|contributors|invites|watchers/me`,
+     `/api/lists/connections`, `/api/dm/conversations`, `/api/widgets/*` — all
+     `200` with the bearer token.
 2. **The per-provider `GET /api/auth/{provider}/status` endpoints are a red
    herring** — they report whether the *server* has that OAuth integration
    configured, not whether *this user* has linked it. The real per-user link
@@ -131,12 +264,40 @@ service method exists, intentionally unsurfaced).
 `RemoveIdentityAsync` don't parse their response bodies — some were
 deliberately never exercised live (creating an org, disconnecting a linked
 identity) to avoid mutating shared test infrastructure, so callers re-fetch
-from a `GET` afterward rather than trusting a typed write response. Lists'
-schema/column DSL (`PUT /api/lists/{id}/schema`) was only partially reverse
-engineered and is **not implemented** — data rows work fine schema-less
-(confirmed live), so that's the supported path. If you pick up any of this,
-verify the actual response shape against a real (test) account before typing
-it strictly, and prefer read-after-write over trusting an unverified envelope.
+from a `GET` afterward rather than trusting a typed write response. If you pick
+up any of this, verify the actual response shape against a real (test) account
+before typing it strictly, and prefer read-after-write over trusting an
+unverified envelope.
+
+**The two "API-blocked" items in this file are no longer blocked** — both are
+now fully published, and `/help/*` + `/help/api/*` are far richer than
+`/api/openapi.json`, whose `description` fields are mostly empty. **Read the
+help pages, not just the spec.**
+
+- **List schema / column DSL** — previously "only partially reverse engineered
+  and not implemented". Fully documented at `/help/api/lists-dsl`: a `schema`
+  object of `{name, description, fields[]}`; twelve field types (`text`,
+  `textarea`, `number`, `boolean`, `date`, `datetime`, `email`, `url`, `tel`,
+  `select`, `multiselect`, `priority`); `validation` rules (`min`, `max`,
+  `minLength`, `maxLength`, `pattern`, `step`); and single-condition
+  conditional visibility over ten operators. `GET /api/lists/{id}/schema`
+  returns `200 {"data":{...}}` with the bearer token.
+  **`PUT /api/lists/{id}/schema` takes two body shapes and they are not
+  equivalent:** a `schema` DSL object is a **destructive rebuild** (wipes and
+  recreates every column, and `schema.name` becomes the list's new title),
+  while a `properties` array is a **non-destructive** edit that preserves row
+  data. Don't ship one "Save schema" button. Schema-less rows do still work,
+  so that remains a valid fallback for lists that have no columns.
+- **Materialize ("Create from…")** — previously "a single opaque `source`
+  string". Fully documented at `/help/api/create-from`: `POST /api/materialize`
+  with `{target, source, listConfig?, docConfig?, messageConfig?}`, where
+  `target` is `list`/`doc`/`both`/`message` and `source.kind` is one of
+  `messages`/`lists`/`rows`/`document`/`docElements`. **The request sends
+  id-only references, never content** — the server re-fetches and authorizes
+  every id under the calling user, and does not trust client cell values or
+  body text. `target: "message"` deliberately **writes nothing** and returns a
+  draft (`{content, thread[], isThread, charLimit}`) to hand to the normal
+  composer, so that every posting gate stays in one place.
 
 Left nav maps to real views now: **Feed**, **Messages** (Direct Messages),
 **Lists**, **Documents**, **Organizations**, **People** (profiles + follow),
@@ -145,6 +306,40 @@ small per-tag cache in `_views`), **Accounts** (Connected Accounts),
 **Settings**, and **Alerts** (right-rail toggle, not a center view). Feed/search
 cards open a profile in the People tab via the `Navigator` hub
 (`Services/Navigator.cs`) → `MainWindow.OpenProfile`.
+
+### Re-capturing wire shapes when the API moves
+
+The models in `Models/` are hand-written against **real captured payloads**, not
+against the OpenAPI spec (whose `description` fields are mostly empty and whose
+schemas omit fields the server actually sends). When a model looks wrong, capture
+a fresh payload rather than guessing:
+
+```sh
+set -a; source .env; set +a
+TOK=$(curl -s -X POST https://interlinedlist.com/api/auth/sync-token \
+  -H 'Content-Type: application/json' \
+  -d "{\"email\":\"$INTERLINEDLIST_EMAIL\",\"password\":\"$INTERLINEDLIST_PASSWORD\"}" \
+  | python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])')
+
+# Sample BROADLY — the interesting fields are null on most rows.
+curl -s "https://interlinedlist.com/api/messages?limit=80" -H "Authorization: Bearer $TOK" > m80.json
+```
+
+Three gotchas that have each cost real time:
+
+1. **`limit=1` lies.** `linkMetadata`, `crossPostUrls`, `pushedMessage` and
+   `replyCounts` are null on most messages. An 80-row sample was needed before
+   `pushedMessage` appeared at all (5 of 80). Take the union of keys across a
+   large sample, not the keys of row zero.
+2. **Message content contains raw control characters**, so Python's strict JSON
+   parser rejects the feed. Use `json.loads(text, strict=False)` when inspecting.
+3. **Verify the model, don't eyeball it.** A throwaway `net10.0` console project
+   that `<Compile Include>`s the `Models/*.cs` files and deserializes the
+   captured JSON will run on macOS (the models only need `System.Text.Json`,
+   unlike the WPF project). That is how the field set here was confirmed — it
+   catches a silently-unmapped property, which eyeballing does not. Note
+   `_count` needs an explicit `[JsonPropertyName]`; a leading underscore does
+   not survive camelCase matching.
 
 ## Packaging & distribution
 
@@ -157,6 +352,8 @@ then build the installer —
 
 ```sh
 dotnet publish InterlinedList/InterlinedList.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=false
+# the sync tray utility publishes into the SAME payload folder (shares the runtime):
+dotnet publish InterlinedList.Sync/InterlinedList.Sync.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=false -o InterlinedList/bin/Release/net10.0-windows/win-x64/publish
 dotnet build installer/InterlinedList.Installer.wixproj -c Release
 ```
 
@@ -168,7 +365,12 @@ file harvesting runs before that hook ever fires, confirmed empirically in CI
 (the publish directory was still missing when harvesting ran), so don't
 reintroduce that pattern without verifying it actually executes. Produces
 `InterlinedList-Setup.msi` for direct download/side-loading, Start Menu
-shortcut, per-machine install under Program Files. **Before shipping:**
+shortcuts (app **and** sync utility), per-machine install under Program Files.
+Because the sync utility publishes into the same folder, the recursive glob picks
+up `InterlinedList.Sync.exe` automatically; `Package.wxs` adds three registry-only
+components: a **HKCU `Run` autostart** for the sync utility and two **Event Log
+sources** (`InterlinedList`, `InterlinedListSync`) — the elevated install creates
+them so the `asInvoker` apps can write to Event Viewer. **Before shipping:**
 replace `installer/License.rtf` with the real EULA.
 
 **MSIX (`InterlinedList.Package/`)** — classic Desktop Bridge "Windows
@@ -208,16 +410,27 @@ Image assets in `InterlinedList.Package/Images/` were generated from
 teal-deep `#0C2C3A` background (splash) — regenerate them the same way if the
 mark changes, don't hand-edit the PNGs.
 
+The `.wapproj` references **both** `InterlinedList.csproj` and
+`InterlinedList.Sync.csproj`, so the MSIX bundles both executables. The manifest
+declares a second `<Application Id="InterlinedListSync">` plus a
+`windows.startupTask` extension (the `uap5` namespace; the MSIX equivalent of the
+MSI's `Run` key) that auto-launches the sync utility at login. The Sync project
+declares `<RuntimeIdentifiers>win-x64</RuntimeIdentifiers>` for the same
+nested-publish reason the main app does (`NETSDK1047`).
+
 ## Continuous integration
 
 `.github/workflows/build.yml` runs on every push/PR to `main`/`dev` (and via
 manual `workflow_dispatch`), on `windows-latest`, with three jobs:
 
-- **`build-app`** — fast sanity-check `dotnet build` of the WPF app alone; the
-  other two jobs `needs:` this one so a trivial compile break fails fast
-  instead of waiting on a much slower packaging build.
-- **`build-msi`** — publishes the app, then builds the WiX MSI, uploads
-  `InterlinedList-Setup-msi` as a workflow artifact.
+- **`build-app`** — fast sanity-check `dotnet build` of the WPF app, plus the
+  sync engine + tray utility, and `dotnet test` of `InterlinedList.Sync.Core.Tests`
+  (the engine is platform-neutral so its tests run here); the other two jobs
+  `needs:` this one so a trivial compile break fails fast instead of waiting on a
+  much slower packaging build.
+- **`build-msi`** — publishes the app **and the sync utility** (into the same
+  payload folder), then builds the WiX MSI, uploads `InterlinedList-Setup-msi` as
+  a workflow artifact.
 - **`build-msix`** — adds `microsoft/setup-msbuild` (locates VS's MSBuild)
   then builds the `.wapproj` directly (see above), uploads
   `InterlinedList-Store-package` (the AppxBundle + `.msixupload`) as an
@@ -236,6 +449,32 @@ three real, non-obvious issues surfaced and are fixed in the current state
 3. `TargetPlatformVersion` in the `.wapproj` must match an SDK actually
    installed on the runner (see above) — it drifts as GitHub updates runner
    images, so a future image update could reintroduce this failure.
+4. **`InterlinedList.Sync.Core.csproj` needs `<RuntimeIdentifiers>win-x64</RuntimeIdentifiers>`
+   too** — it was the only project in the reference chain missing it, and the
+   MSIX nested publish failed with `NETSDK1047` ("Assets file … doesn't have a
+   target for 'net10.0/win-x64'"). Same root cause as item 2, and a platform-
+   neutral `TargetFramework` does **not** exempt a project from needing the RID
+   declared: the RID must be present at *restore* time, and passing `-r win-x64`
+   on the CLI is not enough.
+5. **A non-entry-point `ProjectReference` lands in a SUBFOLDER of the MSIX
+   payload, so `Package.appxmanifest` must say
+   `Executable="InterlinedList.Sync\InterlinedList.Sync.exe"`, not the bare
+   filename** (`APPX0703` otherwise). Desktop Bridge flattens only the
+   entry-point project (`EntryPointProjectUniqueName`) to the package root;
+   everything else is harvested under a folder named after the project:
+   ```
+   InterlinedList.exe      -> …\bin\x64\Release\InterlinedList\InterlinedList.exe
+   InterlinedList.Sync.exe -> …\bin\x64\Release\InterlinedList.Sync\InterlinedList.Sync.exe
+   ```
+   **This is the one place the two packaging tracks legitimately disagree:** the
+   MSI publishes both projects into the *same* folder and WiX globs it, so a
+   bare filename is correct there. Don't "tidy" the MSIX subdirectory away.
+
+**Both 4 and 5 were latent for six weeks.** The `InterlinedList.Sync*` projects
+existed only on a local `main` that had never been pushed, so **CI had never
+once built the MSIX half of the sync feature** — it was written, documented here
+as working, and never exercised. If you add a project, push it, and check that
+all three CI jobs actually ran against it.
 
 **Releases** — `.github/workflows/release.yml` triggers on a pushed `v*` tag
 (e.g. `git tag v1.0.0 && git push origin v1.0.0`). It runs the same

@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         xmlns:vm="clr-namespace:InterlinedList.ViewModels"
+        xmlns:views="clr-namespace:InterlinedList.Views"
         Title="InterlinedList"
         Height="800" Width="1280"
         MinHeight="560" MinWidth="840"
@@ -201,11 +202,33 @@
                                            FontSize="10" FontWeight="SemiBold"
                                            Foreground="{DynamicResource TextMutedBrush}"
                                            VerticalAlignment="Center"/>
-                                <Button Content="Mark all read"
-                                        Command="{Binding Notifications.MarkAllReadCommand}"
-                                        HorizontalAlignment="Right"
-                                        Style="{StaticResource DigBtnStyle}"/>
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                    <Button Content="See all"
+                                            Click="ShowAllNotifications_Click"
+                                            Style="{StaticResource DigBtnStyle}"
+                                            Margin="0,0,8,0"/>
+                                    <Button Content="Mark all read"
+                                            Command="{Binding Notifications.MarkAllReadCommand}"
+                                            Style="{StaticResource DigBtnStyle}"/>
+                                </StackPanel>
                             </Grid>
+
+                            <!-- Engagement totals. Hidden entirely when the
+                                 endpoint didn't answer, rather than showing
+                                 zeros that may not be zeros. -->
+                            <Border Margin="0,0,0,10"
+                                    Background="{DynamicResource Surface3Brush}"
+                                    BorderBrush="{DynamicResource BorderBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="4"
+                                    Padding="10,6"
+                                    Visibility="{Binding Notifications.HasEngagement, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Text="{Binding Notifications.EngagementSummary}"
+                                           FontFamily="JetBrains Mono, Consolas"
+                                           FontSize="10"
+                                           Foreground="{DynamicResource TextBodyBrush}"
+                                           TextWrapping="Wrap"/>
+                            </Border>
 
                             <ItemsControl ItemsSource="{Binding Notifications.Items}">
                                 <ItemsControl.ItemTemplate>
@@ -256,6 +279,16 @@
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
                         </StackPanel>
+
+                        <!--
+                            Widgets: news, markets, transit, bike share. A
+                            self-contained UserControl that owns its own
+                            ViewModel and loads itself, so it needs no
+                            code-behind here and stays visible in both rail
+                            modes. Each card degrades to a quiet placeholder on
+                            failure — see WidgetViewModel.
+                        -->
+                        <views:WidgetRailView Margin="0,4,0,0"/>
 
                     </StackPanel>
                 </ScrollViewer>
