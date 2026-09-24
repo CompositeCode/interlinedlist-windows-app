@@ -680,6 +680,8 @@
                           HorizontalScrollBarVisibility="Disabled"
                           Padding="20,12">
                 <StackPanel>
+                    <!-- Powered Template: AI list from a description (self-contained, hides itself unless AI is available) -->
+                    <local:PoweredTemplatePanel OpenListCommand="{Binding SelectListCommand}" RefreshCommand="{Binding LoadListsCommand}" Margin="0,0,0,12"/>
                     <!-- ── Column form builder (#18) ──────────────────────────────
                          Add / edit / remove / reorder columns across all twelve
                          field types. Saving an existing list goes through the
