@@ -85,6 +85,17 @@ public sealed partial class InterlinedApiClient
             : null;
     }
 
+    /// <summary>
+    /// Aggregate dig/push engagement on the current user's own messages.
+    /// </summary>
+    /// <remarks>
+    /// Re-probed live 2026-09-16: returns <c>200</c> with the bearer token.
+    /// <c>CLAUDE.md</c> documented this as a <c>401</c> cookie-only endpoint;
+    /// that claim was stale (see #124). Nothing here needs a cookie session.
+    /// </remarks>
+    public Task<UserEngagement> GetEngagementAsync(CancellationToken ct = default)
+        => GetJsonAsync<UserEngagement>("api/user/engagement", ct);
+
     // ── Avatar / email / account lifecycle ──────────────────────────────────────
     // Request shapes verified against the OpenAPI spec 2026-07-31: avatar {url},
     // change-email {newEmail}, delete {username,email} (a self-confirmation guard).
