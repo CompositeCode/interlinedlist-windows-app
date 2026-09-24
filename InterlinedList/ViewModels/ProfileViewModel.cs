@@ -127,14 +127,26 @@ public partial class ProfileViewModel : ObservableObject
     [RelayCommand]
     private async Task LoadProfileAsync()
     {
-        var username = LookupUsername.Trim().TrimStart('@');
-        if (string.IsNullOrWhiteSpace(username))
+        var typed = LookupUsername.Trim();
+        if (string.IsNullOrWhiteSpace(typed))
             return;
 
         IsLoading = true;
         try
         {
-            var profile = await _session.Api.GetProfileAsync(username);
+            // Resolve through the lookup endpoint first. It accepts a bare
+            // username only — a pasted "@adron" 404s — so this both strips the
+            // "@" users naturally type and turns "no such account" into a clear
+            // message instead of a raw 404 from the profile fetch.
+            var resolved = await _session.Api.LookupUserAsync(typed);
+            if (resolved is null)
+            {
+                Profile = null;
+                ErrorMessage = $"No account found for \u201c{typed}\u201d.";
+                return;
+            }
+
+            var profile = await _session.Api.GetProfileAsync(resolved.Username);
             Profile = profile;
 
             Relationship = await _session.Api.GetFollowStatusAsync(profile.Id);
