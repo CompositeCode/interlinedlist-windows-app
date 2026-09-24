@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using InterlinedList.Models;
 using InterlinedList.Services;
 using Microsoft.Win32;
 
@@ -83,11 +84,45 @@ public partial class FeedViewModel : ObservableObject
 
     public string ScheduledToggleLabel => ShowScheduled ? "← Back to feed" : "Scheduled";
 
+    // ── Tags ────────────────────────────────────────────────────────────────────
+
+    /// <summary>Tags attached to the next post, sent as <c>tags: string[]</c>.</summary>
+    public ObservableCollection<string> ComposeTags { get; } = new();
+
+    /// <summary>Prefix-match suggestions for whatever is in <see cref="TagInput"/>.</summary>
+    public ObservableCollection<TrendingTag> TagSuggestions { get; } = new();
+
+    /// <summary>Most-used tags in the server's trailing window.</summary>
+    public ObservableCollection<TrendingTag> TrendingTags { get; } = new();
+
+    [ObservableProperty]
+    private string tagInput = "";
+
+    public bool HasTrendingTags => TrendingTags.Count > 0;
+
+    /// <summary>
+    /// The tag the feed is currently filtered to (<c>GET /api/messages?tag=</c>),
+    /// or null for the unfiltered feed.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasActiveTag))]
+    [NotifyPropertyChangedFor(nameof(ActiveTagLabel))]
+    private string? activeTag;
+
+    public bool HasActiveTag => !string.IsNullOrEmpty(ActiveTag);
+    public string ActiveTagLabel => $"Showing #{ActiveTag}";
+
+    // Debounces the autocomplete call so typing doesn't fire one request per
+    // keystroke. Cancelled and replaced on each change; never awaited on the
+    // dispatcher.
+    private CancellationTokenSource? _autocompleteCts;
+
     public FeedViewModel(SessionService session)
     {
         _session = session;
         AttachedImageUrls.CollectionChanged += (_, _) => PostCommand.NotifyCanExecuteChanged();
         AttachedVideoUrls.CollectionChanged += (_, _) => PostCommand.NotifyCanExecuteChanged();
+        TrendingTags.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasTrendingTags));
     }
 
     /// <summary>
@@ -103,6 +138,129 @@ public partial class FeedViewModel : ObservableObject
     }
 
     private void OnItemPosted(object? sender, EventArgs e) => RefreshCommand.Execute(null);
+
+    // ── Tag commands ────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Add whatever is typed to the compose tag list. Splits on commas only —
+    /// live tags contain spaces (<c>orbit culture</c>,
+    /// <c>life is short, o brave girl</c>), so whitespace can't be a delimiter.
+    /// Duplicates are ignored, case-insensitively.
+    /// </summary>
+    private bool CanAddTag() => !string.IsNullOrWhiteSpace(TagInput);
+
+    [RelayCommand(CanExecute = nameof(CanAddTag))]
+    private void AddTag()
+    {
+        foreach (var part in TagInput.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+            AddTagValue(part);
+
+        TagInput = "";
+        TagSuggestions.Clear();
+    }
+
+    /// <summary>Accept an autocomplete or trending suggestion into the composer.</summary>
+    [RelayCommand]
+    private void UseTagSuggestion(string? tag)
+    {
+        AddTagValue(tag);
+        TagInput = "";
+        TagSuggestions.Clear();
+    }
+
+    private void AddTagValue(string? tag)
+    {
+        var value = tag?.Trim();
+        if (string.IsNullOrEmpty(value)) return;
+        if (ComposeTags.Any(t => string.Equals(t, value, StringComparison.OrdinalIgnoreCase))) return;
+        ComposeTags.Add(value);
+    }
+
+    [RelayCommand]
+    private void RemoveTag(string tag) => ComposeTags.Remove(tag);
+
+    /// <summary>Filter the feed to one tag. Called from a chip on a card or from the trending panel.</summary>
+    [RelayCommand]
+    private async Task FilterByTagAsync(string? tag)
+    {
+        if (string.IsNullOrWhiteSpace(tag)) return;
+        ActiveTag = tag.Trim();
+        ShowScheduled = false;
+        await RefreshAsync();
+    }
+
+    [RelayCommand]
+    private async Task ClearTagFilterAsync()
+    {
+        if (ActiveTag is null) return;
+        ActiveTag = null;
+        await RefreshAsync();
+    }
+
+    [RelayCommand]
+    private async Task LoadTrendingTagsAsync()
+    {
+        try
+        {
+            var trending = await _session.Api.GetTrendingTagsAsync();
+            TrendingTags.Clear();
+            foreach (var t in trending)
+                TrendingTags.Add(t);
+        }
+        catch (InterlinedApiException)
+        {
+            // Decorative panel — a failure here shouldn't put an error banner
+            // over the feed the user actually came for.
+        }
+    }
+
+    partial void OnTagInputChanged(string value)
+    {
+        AddTagCommand.NotifyCanExecuteChanged();
+        _ = SuggestTagsAsync(value);
+    }
+
+    /// <summary>
+    /// Debounced prefix autocomplete. Fire-and-forget on purpose: it must never
+    /// block the dispatcher, and a superseded keystroke's request is cancelled
+    /// rather than awaited.
+    /// </summary>
+    private async Task SuggestTagsAsync(string prefix)
+    {
+        _autocompleteCts?.Cancel();
+        _autocompleteCts?.Dispose();
+
+        if (string.IsNullOrWhiteSpace(prefix))
+        {
+            _autocompleteCts = null;
+            TagSuggestions.Clear();
+            return;
+        }
+
+        var cts = new CancellationTokenSource();
+        _autocompleteCts = cts;
+        try
+        {
+            await Task.Delay(250, cts.Token);
+            var matches = await _session.Api.AutocompleteTagsAsync(prefix, ct: cts.Token);
+            if (cts.Token.IsCancellationRequested) return;
+
+            TagSuggestions.Clear();
+            foreach (var m in matches)
+            {
+                if (ComposeTags.Any(t => string.Equals(t, m.Tag, StringComparison.OrdinalIgnoreCase))) continue;
+                TagSuggestions.Add(m);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Superseded by a later keystroke.
+        }
+        catch (InterlinedApiException)
+        {
+            TagSuggestions.Clear();
+        }
+    }
 
     [RelayCommand]
     private async Task AttachImageAsync()
@@ -235,7 +393,7 @@ public partial class FeedViewModel : ObservableObject
         try
         {
             _offset = 0;
-            var page = await _session.Api.GetMessagesAsync(limit: PageSize, offset: 0);
+            var page = await _session.Api.GetFeedPageAsync(limit: PageSize, offset: 0, tag: ActiveTag);
 
             Messages.Clear();
             foreach (var message in page.Messages)
@@ -263,7 +421,7 @@ public partial class FeedViewModel : ObservableObject
         IsLoadingMore = true;
         try
         {
-            var page = await _session.Api.GetMessagesAsync(limit: PageSize, offset: _offset);
+            var page = await _session.Api.GetFeedPageAsync(limit: PageSize, offset: _offset, tag: ActiveTag);
 
             foreach (var message in page.Messages)
                 Messages.Add(Wrap(message));
@@ -291,16 +449,22 @@ public partial class FeedViewModel : ObservableObject
         IsPosting = true;
         try
         {
-            await _session.Api.PostMessageAsync(
-                ComposeText.Trim(),
-                _session.CurrentUser?.DefaultPubliclyVisible ?? true,
-                crossPostToBluesky: CrossPostToBluesky,
-                crossPostToTwitter: CrossPostToTwitter,
-                mastodonProviderIds: CrossPostToMastodon ? MastodonProvider : null,
-                scheduledAt: ResolveScheduledAt(),
-                imageUrls: AttachedImageUrls.Count > 0 ? AttachedImageUrls.ToList() : null,
-                videoUrls: AttachedVideoUrls.Count > 0 ? AttachedVideoUrls.ToList() : null);
+            await _session.Api.PostMessageAsync(new NewMessage
+            {
+                Content = ComposeText.Trim(),
+                PubliclyVisible = _session.CurrentUser?.DefaultPubliclyVisible ?? true,
+                CrossPostToBluesky = CrossPostToBluesky,
+                CrossPostToTwitter = CrossPostToTwitter,
+                MastodonProviderIds = CrossPostToMastodon ? MastodonProvider : null,
+                ScheduledAt = ResolveScheduledAt(),
+                ImageUrls = AttachedImageUrls.Count > 0 ? AttachedImageUrls.ToList() : null,
+                VideoUrls = AttachedVideoUrls.Count > 0 ? AttachedVideoUrls.ToList() : null,
+                Tags = ComposeTags.Count > 0 ? ComposeTags.ToList() : null,
+            });
             ComposeText = "";
+            ComposeTags.Clear();
+            TagInput = "";
+            TagSuggestions.Clear();
             CrossPostToBluesky = false;
             CrossPostToTwitter = false;
             CrossPostToMastodon = false;
