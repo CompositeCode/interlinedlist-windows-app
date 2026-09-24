@@ -56,15 +56,31 @@ public sealed partial class SessionService : ObservableObject
             CurrentUser = await _api.GetCurrentUserAsync(ct);
             return true;
         }
+        catch (InterlinedApiException ex) when (ex.StatusCode is 401 or 403)
+        {
+            // A genuine rejection: the saved token is dead, so drop it. This is
+            // the ONLY case that should clear it.
+            AppLog.Info($"Saved session rejected ({ex.StatusCode}); clearing it and showing the login window.");
+            ClearLocalSession();
+            return false;
+        }
         catch (Exception ex)
         {
-            // Deliberately catch everything, not just InterlinedApiException: this
-            // runs from App.OnStartup, and a network/timeout/JSON failure escaping
-            // here used to kill the process before any window appeared (see the
-            // "installs but won't run" note in CLAUDE.md). Falling back to the
-            // login window is always the right answer.
-            AppLog.Warn($"Session restore failed; falling back to the login window. {ex.GetType().Name}: {ex.Message}");
-            ClearLocalSession();
+            // Catch everything so nothing escapes into App.OnStartup — but do
+            // NOT clear the token.
+            //
+            // A transient network/DNS/timeout/JSON failure must not cost the
+            // user their saved credential. App.xaml.cs already has this exactly
+            // right and says so: "The token is intentionally NOT cleared here;
+            // only a genuine auth rejection inside TryRestoreSessionAsync
+            // clears it." An earlier revision of this method cleared on ANY
+            // exception, which meant launching on a flaky connection deleted
+            // session.dat — and because the sync tray utility reads that same
+            // file, it silently signed the tray out too. That is a worse
+            // failure than the one it was guarding against.
+            AppLog.Warn($"Session restore failed transiently; keeping the saved token. {ex.GetType().Name}: {ex.Message}");
+            _api.AccessToken = null;
+            CurrentUser = null;
             return false;
         }
     }
