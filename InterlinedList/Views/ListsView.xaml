@@ -107,6 +107,115 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <!-- Tiny caption above a field, so a dense column row stays readable -->
+        <Style x:Key="CaptionStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}"/>
+            <Setter Property="Margin" Value="0,0,0,2"/>
+        </Style>
+
+        <!-- Compact field for the column editor's dense grid -->
+        <Style x:Key="MicroFieldStyle" TargetType="TextBox" BasedOn="{StaticResource FieldStyle}">
+            <Setter Property="Margin" Value="0"/>
+            <Setter Property="Padding" Value="6,4"/>
+            <Setter Property="FontSize" Value="12"/>
+        </Style>
+
+        <Style x:Key="MicroCheckStyle" TargetType="CheckBox">
+            <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="0,0,12,0"/>
+        </Style>
+
+        <!-- Dropdown item: templated so the dark theme's own brushes win over
+             the system highlight colours the default ComboBoxItem uses. -->
+        <Style x:Key="FieldComboItemStyle" TargetType="ComboBoxItem">
+            <Setter Property="Foreground" Value="{DynamicResource TextBodyBrush}"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Padding" Value="8,5"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBoxItem">
+                        <Border x:Name="Bg" Background="Transparent" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsHighlighted" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource Surface3Brush}"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource NavActiveBgBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Type picker. Templated rather than themed-by-setters because the
+             default chrome ignores the theme brushes on the drop-down button. -->
+        <Style x:Key="FieldComboStyle" TargetType="ComboBox">
+            <Setter Property="Foreground" Value="{DynamicResource TextBodyBrush}"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="ItemContainerStyle" Value="{StaticResource FieldComboItemStyle}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Grid>
+                            <ToggleButton Focusable="False"
+                                          ClickMode="Press"
+                                          IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="ToggleButton">
+                                        <Border x:Name="Bg"
+                                                Background="{DynamicResource SurfaceBrush}"
+                                                BorderBrush="{DynamicResource BorderBrush}"
+                                                BorderThickness="1"
+                                                CornerRadius="3">
+                                            <Path HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                  Margin="0,0,8,0"
+                                                  Data="M 0 0 L 8 0 L 4 5 Z"
+                                                  Fill="{DynamicResource TextMutedBrush}"/>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="Bg" Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                            </ToggleButton>
+
+                            <ContentPresenter IsHitTestVisible="False"
+                                              Content="{TemplateBinding SelectionBoxItem}"
+                                              ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                              ContentStringFormat="{TemplateBinding SelectionBoxItemStringFormat}"
+                                              Margin="8,4,22,4"
+                                              VerticalAlignment="Center"/>
+
+                            <Popup IsOpen="{TemplateBinding IsDropDownOpen}"
+                                   Placement="Bottom"
+                                   AllowsTransparency="True"
+                                   Focusable="False"
+                                   PopupAnimation="Fade">
+                                <Border MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"
+                                        MaxHeight="260"
+                                        Background="{DynamicResource SurfaceBrush}"
+                                        BorderBrush="{DynamicResource BorderStrongBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="3">
+                                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                        <ItemsPresenter/>
+                                    </ScrollViewer>
+                                </Border>
+                            </Popup>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </UserControl.Resources>
 
     <Grid>
@@ -143,10 +252,16 @@
                              AcceptsReturn="True"
                              TextWrapping="Wrap"
                              MinHeight="52"/>
-                    <Button Content="Create list"
-                            Command="{Binding CreateListCommand}"
-                            HorizontalAlignment="Left"
-                            Style="{StaticResource PrimaryBtnStyle}"/>
+                    <StackPanel Orientation="Horizontal">
+                        <Button Content="Create list"
+                                Command="{Binding CreateListCommand}"
+                                Style="{StaticResource PrimaryBtnStyle}"
+                                Margin="0,0,6,0"/>
+                        <Button Content="Define columns"
+                                Command="{Binding ColumnEditor.OpenForNewListCommand}"
+                                Style="{StaticResource SmallBtnStyle}"
+                                VerticalAlignment="Center"/>
+                    </StackPanel>
 
                     <TextBlock Text="{Binding ErrorMessage}"
                                Foreground="#FFE81123"
@@ -191,6 +306,10 @@
                                             <StackPanel Orientation="Horizontal">
                                                 <Button Content="View"
                                                         Command="{Binding DataContext.SelectListCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                        CommandParameter="{Binding}"
+                                                        Style="{StaticResource SmallBtnStyle}"/>
+                                                <Button Content="Columns"
+                                                        Command="{Binding DataContext.OpenColumnEditorCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                         CommandParameter="{Binding}"
                                                         Style="{StaticResource SmallBtnStyle}"/>
                                                 <Button Content="Delete"
@@ -345,6 +464,239 @@
                           HorizontalScrollBarVisibility="Disabled"
                           Padding="20,12">
                 <StackPanel>
+                    <!-- ── Column form builder (#18) ──────────────────────────────
+                         Add / edit / remove / reorder columns across all twelve
+                         field types. Saving an existing list goes through the
+                         non-destructive `properties` PUT, which accepts only six
+                         of them — hence the warnings, which appear the moment a
+                         rebuild-only type is picked rather than at save time. -->
+                    <Border Margin="0,0,0,12"
+                            Background="{DynamicResource Surface2Brush}"
+                            BorderBrush="{DynamicResource BorderStrongBrush}"
+                            BorderThickness="1"
+                            CornerRadius="4"
+                            Padding="12,10"
+                            Visibility="{Binding ColumnEditor.IsOpen, Converter={StaticResource BoolToVisibility}}">
+                        <StackPanel>
+                            <DockPanel Margin="0,0,0,6">
+                                <Button DockPanel.Dock="Right"
+                                        Content="Close"
+                                        Command="{Binding ColumnEditor.CloseCommand}"
+                                        Style="{StaticResource RowActionBtnStyle}"/>
+                                <TextBlock Text="{Binding ColumnEditor.HeaderText}"
+                                           FontSize="13" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextBrush}"
+                                           VerticalAlignment="Center"/>
+                            </DockPanel>
+
+                            <TextBlock Text="Rows are keyed by each column's key, never by its label. A saved column's key can't change — rename the label instead."
+                                       FontSize="11"
+                                       Foreground="{DynamicResource TextMutedBrush}"
+                                       TextWrapping="Wrap"
+                                       Margin="0,0,0,8"/>
+
+                            <ItemsControl ItemsSource="{Binding ColumnEditor.Columns}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:ListColumnDraftViewModel}">
+                                        <Border Margin="0,0,0,6"
+                                                Background="{DynamicResource Surface3Brush}"
+                                                BorderBrush="{DynamicResource BorderBrush}"
+                                                BorderThickness="1"
+                                                CornerRadius="3"
+                                                Padding="10,8">
+                                            <StackPanel>
+                                                <!-- Label · type · order · remove -->
+                                                <Grid Margin="0,0,0,6">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="168"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <StackPanel Grid.Column="0" Margin="0,0,8,0">
+                                                        <TextBlock Text="Label" Style="{StaticResource CaptionStyle}"/>
+                                                        <TextBox Text="{Binding Label, UpdateSourceTrigger=PropertyChanged}"
+                                                                 Style="{StaticResource MicroFieldStyle}"/>
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="1" Margin="0,0,8,0">
+                                                        <TextBlock Text="Type" Style="{StaticResource CaptionStyle}"/>
+                                                        <ComboBox ItemsSource="{Binding Source={x:Static vm:ListColumnDraftViewModel.TypeOptions}}"
+                                                                  DisplayMemberPath="Caption"
+                                                                  SelectedValuePath="Value"
+                                                                  SelectedValue="{Binding Type}"
+                                                                  Style="{StaticResource FieldComboStyle}"
+                                                                  MinHeight="26"/>
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Bottom">
+                                                        <Button Content="Up"
+                                                                Command="{Binding DataContext.ColumnEditor.MoveColumnUpCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                CommandParameter="{Binding}"
+                                                                Style="{StaticResource RowActionBtnStyle}"/>
+                                                        <Button Content="Down"
+                                                                Command="{Binding DataContext.ColumnEditor.MoveColumnDownCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                CommandParameter="{Binding}"
+                                                                Style="{StaticResource RowActionBtnStyle}"/>
+                                                        <Button Content="Remove"
+                                                                Command="{Binding DataContext.ColumnEditor.RemoveColumnCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                CommandParameter="{Binding}"
+                                                                Style="{StaticResource RowActionBtnStyle}"/>
+                                                    </StackPanel>
+                                                </Grid>
+
+                                                <!-- Key · default -->
+                                                <Grid Margin="0,0,0,6">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <StackPanel Grid.Column="0" Margin="0,0,8,0">
+                                                        <TextBlock Text="Key" Style="{StaticResource CaptionStyle}"/>
+                                                        <TextBox Text="{Binding Key, UpdateSourceTrigger=PropertyChanged}"
+                                                                 IsReadOnly="{Binding IsExistingColumn}"
+                                                                 FontFamily="JetBrains Mono, Consolas"
+                                                                 Style="{StaticResource MicroFieldStyle}"/>
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="1">
+                                                        <TextBlock Text="{Binding DefaultHint, StringFormat='Default ({0})'}"
+                                                                   Style="{StaticResource CaptionStyle}"/>
+                                                        <TextBox Text="{Binding DefaultValueText, UpdateSourceTrigger=PropertyChanged}"
+                                                                 Style="{StaticResource MicroFieldStyle}"/>
+                                                    </StackPanel>
+                                                </Grid>
+
+                                                <!-- Placeholder · help text -->
+                                                <Grid Margin="0,0,0,6">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <StackPanel Grid.Column="0" Margin="0,0,8,0">
+                                                        <TextBlock Text="Placeholder" Style="{StaticResource CaptionStyle}"/>
+                                                        <TextBox Text="{Binding Placeholder, UpdateSourceTrigger=PropertyChanged}"
+                                                                 Style="{StaticResource MicroFieldStyle}"/>
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="1">
+                                                        <TextBlock Text="Help text" Style="{StaticResource CaptionStyle}"/>
+                                                        <TextBox Text="{Binding HelpText, UpdateSourceTrigger=PropertyChanged}"
+                                                                 Style="{StaticResource MicroFieldStyle}"/>
+                                                    </StackPanel>
+                                                </Grid>
+
+                                                <!-- Options (select / multiselect / priority) -->
+                                                <StackPanel Margin="0,0,0,6"
+                                                            Visibility="{Binding RequiresOptions, Converter={StaticResource BoolToVisibility}}">
+                                                    <TextBlock Text="Options (comma-separated, at least one)" Style="{StaticResource CaptionStyle}"/>
+                                                    <TextBox Text="{Binding OptionsText, UpdateSourceTrigger=PropertyChanged}"
+                                                             Style="{StaticResource MicroFieldStyle}"/>
+                                                </StackPanel>
+
+                                                <StackPanel Orientation="Horizontal">
+                                                    <CheckBox Content="Required"
+                                                              IsChecked="{Binding IsRequired}"
+                                                              Style="{StaticResource MicroCheckStyle}"/>
+                                                    <CheckBox Content="Visible"
+                                                              IsChecked="{Binding IsVisible}"
+                                                              Style="{StaticResource MicroCheckStyle}"/>
+                                                </StackPanel>
+
+                                                <TextBlock Text="{Binding KeyNote}"
+                                                           FontSize="10"
+                                                           Foreground="{DynamicResource TextMutedBrush}"
+                                                           TextWrapping="Wrap"
+                                                           Margin="0,4,0,0"
+                                                           Visibility="{Binding KeyNote, Converter={StaticResource NullOrEmptyToVisibility}}"/>
+
+                                                <TextBlock Text="{Binding TypeWarning}"
+                                                           FontSize="11"
+                                                           Foreground="{DynamicResource AmberBrush}"
+                                                           TextWrapping="Wrap"
+                                                           Margin="0,4,0,0"
+                                                           Visibility="{Binding TypeWarning, Converter={StaticResource NullOrEmptyToVisibility}}"/>
+
+                                                <TextBlock Text="{Binding IssueMessage}"
+                                                           FontSize="11"
+                                                           Foreground="#FFE81123"
+                                                           TextWrapping="Wrap"
+                                                           Margin="0,4,0,0"
+                                                           Visibility="{Binding IssueMessage, Converter={StaticResource NullOrEmptyToVisibility}}"/>
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <TextBlock Text="{Binding ColumnEditor.RemovalWarning}"
+                                       FontSize="11"
+                                       Foreground="{DynamicResource AmberBrush}"
+                                       TextWrapping="Wrap"
+                                       Margin="0,2,0,0"
+                                       Visibility="{Binding ColumnEditor.RemovalWarning, Converter={StaticResource NullOrEmptyToVisibility}}"/>
+
+                            <TextBlock Text="{Binding ColumnEditor.RebuildOnlyWarning}"
+                                       FontSize="11"
+                                       Foreground="{DynamicResource AmberBrush}"
+                                       TextWrapping="Wrap"
+                                       Margin="0,4,0,0"
+                                       Visibility="{Binding ColumnEditor.RebuildOnlyWarning, Converter={StaticResource NullOrEmptyToVisibility}}"/>
+
+                            <TextBlock Text="{Binding ColumnEditor.ErrorMessage}"
+                                       FontSize="11"
+                                       Foreground="#FFE81123"
+                                       TextWrapping="Wrap"
+                                       Margin="0,4,0,0"
+                                       Visibility="{Binding ColumnEditor.ErrorMessage, Converter={StaticResource NullOrEmptyToVisibility}}"/>
+
+                            <TextBlock Text="{Binding ColumnEditor.StatusMessage}"
+                                       FontSize="11"
+                                       Foreground="{DynamicResource TextMutedBrush}"
+                                       TextWrapping="Wrap"
+                                       Margin="0,4,0,0"
+                                       Visibility="{Binding ColumnEditor.StatusMessage, Converter={StaticResource NullOrEmptyToVisibility}}"/>
+
+                            <!-- 409: the server named the columns that still hold data.
+                                 Confirmed in place — no native message box (dispatcher rule). -->
+                            <Border Margin="0,8,0,0"
+                                    Background="{DynamicResource Surface3Brush}"
+                                    BorderBrush="{DynamicResource AmberBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="3"
+                                    Padding="10,8"
+                                    Visibility="{Binding ColumnEditor.NeedsForceConfirmation, Converter={StaticResource BoolToVisibility}}">
+                                <StackPanel>
+                                    <TextBlock Text="{Binding ColumnEditor.ForceConfirmationMessage}"
+                                               FontSize="11"
+                                               Foreground="{DynamicResource TextBodyBrush}"
+                                               TextWrapping="Wrap"/>
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,6,0,0">
+                                        <Button Content="Keep them"
+                                                Command="{Binding ColumnEditor.CancelForcedSaveCommand}"
+                                                Style="{StaticResource RowActionBtnStyle}"/>
+                                        <Button Content="Delete the columns and their values"
+                                                Command="{Binding ColumnEditor.ConfirmForcedSaveCommand}"
+                                                Style="{StaticResource SmallBtnStyle}"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+
+                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                <Button Content="Add column"
+                                        Command="{Binding ColumnEditor.AddColumnCommand}"
+                                        Style="{StaticResource SmallBtnStyle}"
+                                        VerticalAlignment="Center"/>
+                                <Button Content="{Binding ColumnEditor.SaveButtonText}"
+                                        Command="{Binding ColumnEditor.SaveCommand}"
+                                        Style="{StaticResource PrimaryBtnStyle}"/>
+                                <TextBlock Text="{Binding ColumnEditor.SaveBlockedReason}"
+                                           FontSize="11"
+                                           Foreground="{DynamicResource TextMutedBrush}"
+                                           TextWrapping="Wrap"
+                                           MaxWidth="360"
+                                           VerticalAlignment="Center"
+                                           Margin="10,0,0,0"
+                                           Visibility="{Binding ColumnEditor.SaveBlockedReason, Converter={StaticResource NullOrEmptyToVisibility}}"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
                     <!-- Share links (own lists only) -->
                     <Border Margin="0,0,0,12"
                             Background="{DynamicResource Surface2Brush}"
